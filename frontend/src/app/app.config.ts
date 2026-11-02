@@ -18,6 +18,7 @@ import { sinConexionInterceptor } from './core/pwa/sin-conexion.interceptor';
 import { PrecargaService } from './core/pwa/precarga.service';
 import { authInterceptor } from './core/auth/auth.interceptor';
 import { AuthService } from './core/auth/auth.service';
+import { apiBaseUrlInterceptor } from './core/api-base-url.interceptor';
 
 registerLocaleData(localeEsMx);
 
@@ -25,7 +26,7 @@ export const appConfig: ApplicationConfig = {
   providers: [
     provideBrowserGlobalErrorListeners(),
     provideRouter(routes, withComponentInputBinding()),
-    provideHttpClient(withFetch(), withInterceptors([sinConexionInterceptor, authInterceptor])),
+    provideHttpClient(withFetch(), withInterceptors([apiBaseUrlInterceptor, sinConexionInterceptor, authInterceptor])),
     { provide: LOCALE_ID, useValue: 'es-MX' },
     { provide: DEFAULT_CURRENCY_CODE, useValue: 'MXN' },
     provideServiceWorker('ngsw-worker.js', {

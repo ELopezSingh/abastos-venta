@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Ventas Chiles</string>
+    <string name="title_activity_main">Ventas Chiles</string>
+    <string name="package_name">com.chiles.ventas</string>
+    <string name="custom_url_scheme">com.chiles.ventas</string>
+</resources>
