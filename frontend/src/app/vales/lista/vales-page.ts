@@ -49,7 +49,7 @@ export class ValesPage {
   });
 
   /** Vale que está pidiendo confirmación para cancelarse. */
-  protected readonly porCancelar = signal<number | null>(null);
+  protected readonly porCancelar = signal<string | null>(null);
   protected readonly cancelando = signal(false);
   protected readonly errorCancelar = signal<string | null>(null);
 
@@ -58,12 +58,12 @@ export class ValesPage {
   protected readonly formatearFolio = formatearFolio;
   protected readonly mensajeDeError = mensajeDeError;
 
-  protected pedirConfirmacion(id: number): void {
+  protected pedirConfirmacion(id: string): void {
     this.errorCancelar.set(null);
     this.porCancelar.set(id);
   }
 
-  protected async cancelar(id: number): Promise<void> {
+  protected async cancelar(id: string): Promise<void> {
     this.cancelando.set(true);
     this.errorCancelar.set(null);
     try {

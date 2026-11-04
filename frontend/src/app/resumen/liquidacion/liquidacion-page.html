@@ -143,7 +143,7 @@
             <tbody>
               @for (v of p.ventas; track $index) {
                 <tr>
-                  <td>{{ formatearFolio(v.ticketId) }}</td>
+                  <td>{{ formatearFolio(v.folio) }}</td>
                   <td class="ventas__cliente">{{ v.clienteNombre }}</td>
                   <td>{{ v.tamano }}</td>
                   <td>{{ v.cajas | number }}</td>

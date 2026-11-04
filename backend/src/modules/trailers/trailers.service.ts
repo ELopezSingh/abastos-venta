@@ -1,4 +1,4 @@
-import { errorDeColor } from "@abastos/shared";
+import { compararLineas, errorDeColor } from "@abastos/shared";
 import type {
   ActualizarManifiestoLineaInput,
   ActualizarTrailerInput,
@@ -6,15 +6,17 @@ import type {
   EstadoTrailer,
   ManifiestoLineaInput,
   TrailerDto,
-  PaginaTrailersCerradosDto
+  PaginaTrailersCerradosDto,
 } from "@abastos/shared";
 import type { Prisma } from "../../generated/prisma/client.js";
 import { prisma } from "../../lib/prisma.js";
 import { aDecimal, aNumero } from "../../lib/dinero.js";
 import { AppError } from "../../middlewares/error-handler.js";
 
+// Sin orderBy: con UUID el id no refleja el orden de captura.
+// Las líneas se ordenan en aDto con compararLineas.
 const conManifiesto = {
-  manifiesto: { orderBy: { id: "asc" } },
+  manifiesto: true,
 } satisfies Prisma.TrailerInclude;
 
 type TrailerConManifiesto = Prisma.TrailerGetPayload<{
@@ -23,8 +25,8 @@ type TrailerConManifiesto = Prisma.TrailerGetPayload<{
 
 /** Cajas vendidas por línea de manifiesto (solo tickets vigentes). */
 async function vendidasPorLinea(
-  lineaIds: number[],
-): Promise<Map<number, number>> {
+  lineaIds: string[],
+): Promise<Map<string, number>> {
   if (lineaIds.length === 0) return new Map();
   const filas = await prisma.ticketDetalle.groupBy({
     by: ["manifiestoDetalleId"],
@@ -34,14 +36,14 @@ async function vendidasPorLinea(
     },
     _sum: { cajas: true },
   });
-  return new Map(filas.map((f) => [f.manifiestoDetalleId, f._sum.cajas ?? 0]));
+  return new Map(filas.map((f) => [f.manifiestoDetalleId, f._sum?.cajas ?? 0]));
 }
 
 function aDto(
   t: TrailerConManifiesto,
-  vendidas: Map<number, number>,
+  vendidas: Map<string, number>,
 ): TrailerDto {
-  const manifiesto = t.manifiesto.map((l) => {
+  const manifiesto = [...t.manifiesto].sort(compararLineas).map((l) => {
     const v = vendidas.get(l.id) ?? 0;
     return {
       id: l.id,
@@ -93,12 +95,12 @@ const lineaAData = (l: ManifiestoLineaInput) => ({
   cajas: l.cajas,
 });
 
-async function buscarOFallar(id: number): Promise<TrailerConManifiesto> {
+async function buscarOFallar(id: string): Promise<TrailerConManifiesto> {
   const trailer = await prisma.trailer.findUnique({
     where: { id },
     include: conManifiesto,
   });
-  if (!trailer) throw new AppError(404, `No existe el trailer ${id}`);
+  if (!trailer) throw new AppError(404, "No existe ese trailer");
   return trailer;
 }
 
@@ -141,13 +143,13 @@ export async function listarTrailers(
   return aDtos(trailers);
 }
 
-export async function obtenerTrailer(id: number): Promise<TrailerDto> {
+export async function obtenerTrailer(id: string): Promise<TrailerDto> {
   const [dto] = await aDtos([await buscarOFallar(id)]);
   return dto!;
 }
 
 export async function actualizarTrailer(
-  id: number,
+  id: string,
   input: ActualizarTrailerInput,
 ): Promise<TrailerDto> {
   await buscarOFallar(id);
@@ -169,7 +171,7 @@ export async function actualizarTrailer(
 }
 
 export async function cambiarEstado(
-  id: number,
+  id: string,
   estado: EstadoTrailer,
 ): Promise<TrailerDto> {
   await buscarOFallar(id);
@@ -198,9 +200,14 @@ export async function listarCerrados(
     : {};
 
   // Se pide uno de más para saber si hay otra página.
+  // El id al final solo desempata, para que la paginación sea estable.
   const filas = await prisma.trailer.findMany({
     where: { estado: "CERRADO", ...busqueda },
-    orderBy: [{ fechaCierre: { sort: "desc", nulls: "last" } }, { id: "desc" }],
+    orderBy: [
+      { fechaCierre: { sort: "desc", nulls: "last" } },
+      { fechaLlegada: "desc" },
+      { id: "desc" },
+    ],
     skip: desde,
     take: POR_PAGINA + 1,
     include: { manifiesto: { select: { id: true, cajas: true } } },
@@ -232,7 +239,7 @@ export async function listarCerrados(
 // ---------- Correcciones al manifiesto ----------
 
 export async function agregarLinea(
-  trailerId: number,
+  trailerId: string,
   input: ManifiestoLineaInput,
 ): Promise<TrailerDto> {
   await buscarOFallar(trailerId);
@@ -242,21 +249,22 @@ export async function agregarLinea(
   return obtenerTrailer(trailerId);
 }
 
-async function lineaDelTrailer(trailerId: number, lineaId: number) {
+async function lineaDelTrailer(trailerId: string, lineaId: string) {
   const linea = await prisma.manifiestoDetalle.findFirst({
     where: { id: lineaId, trailerId },
   });
-  if (!linea)
+  if (!linea) {
     throw new AppError(
       404,
-      `La línea ${lineaId} no pertenece al trailer ${trailerId}`,
+      "Esa línea del manifiesto no pertenece a este trailer",
     );
+  }
   return linea;
 }
 
 export async function actualizarLinea(
-  trailerId: number,
-  lineaId: number,
+  trailerId: string,
+  lineaId: string,
   input: ActualizarManifiestoLineaInput,
 ): Promise<TrailerDto> {
   const actual = await lineaDelTrailer(trailerId, lineaId);
@@ -287,8 +295,8 @@ export async function actualizarLinea(
 }
 
 export async function eliminarLinea(
-  trailerId: number,
-  lineaId: number,
+  trailerId: string,
+  lineaId: string,
 ): Promise<TrailerDto> {
   await lineaDelTrailer(trailerId, lineaId);
   const ventas = await prisma.ticketDetalle.count({

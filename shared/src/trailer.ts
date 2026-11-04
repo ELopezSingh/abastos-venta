@@ -76,8 +76,8 @@ export const listarCerradosQuerySchema = z.object({
 });
 
 export const manifiestoLineaParamsSchema = z.object({
-  id: z.coerce.number().int().positive("Id de trailer inválido"),
-  lineaId: z.coerce.number().int().positive("Id de línea inválido"),
+  id: z.uuid("Id de trailer inválido"),
+  lineaId: z.uuid("Id de línea inválido"),
 });
 
 export type ManifiestoLineaInput = z.infer<typeof manifiestoLineaSchema>;
@@ -90,7 +90,7 @@ export type ActualizarManifiestoLineaInput = z.infer<
 // ---------- Respuestas del API ----------
 
 export interface ManifiestoLineaDto {
-  id: number;
+  id: string;
   producto: string;
   color: string | null;
   tamano: string;
@@ -100,7 +100,7 @@ export interface ManifiestoLineaDto {
 }
 
 export interface TrailerDto {
-  id: number;
+  id: string;
   viaje: string | null;
   placa: string;
   numero: string;
@@ -120,7 +120,7 @@ export interface TrailerDto {
 
 /** Versión compacta para la lista de trailers cerrados. */
 export interface TrailerCerradoDto {
-  id: number;
+  id: string;
   viaje: string | null;
   numero: string;
   invernadero: string;

@@ -13,7 +13,7 @@ export class ResumenApi {
   }
 
   /** Liquidación de un trailer (equivale a la hoja de Excel). */
-  liquidacion(trailerId: Signal<number>) {
+  liquidacion(trailerId: Signal<string>) {
     return httpResource<LiquidacionTrailerDto>(() => `/api/resumen/trailers/${trailerId()}`);
   }
 }

@@ -42,7 +42,7 @@ export class TrailersCerrados {
   protected readonly cargando = signal(true);
   protected readonly error = signal<string | null>(null);
 
-  protected readonly reabriendo = signal<number | null>(null);
+  protected readonly reabriendo = signal<string | null>(null);
   protected readonly aviso = signal<string | null>(null);
 
   /** Cada búsqueda o "Ver más" es un pedido; switchMap descarta respuestas viejas. */

@@ -21,7 +21,7 @@ export class ValesApi {
     return firstValueFrom(this.http.post<TicketDto>(URL, datos));
   }
 
-  cancelar(id: number): Promise<TicketDto> {
+  cancelar(id: string): Promise<TicketDto> {
     return firstValueFrom(this.http.post<TicketDto>(`${URL}/${id}/cancelar`, {}));
   }
 }

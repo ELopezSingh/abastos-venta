@@ -31,11 +31,11 @@ export class TrailersPage {
   protected readonly trailers = this.api.listar(signal<EstadoTrailer>('ACTIVO'));
 
   /** Trailer que está pidiendo confirmación para cerrarse. */
-  protected readonly porCerrar = signal<number | null>(null);
+  protected readonly porCerrar = signal<string | null>(null);
   /** Trailer que se está cerrando en este momento. */
-  protected readonly procesando = signal<number | null>(null);
+  protected readonly procesando = signal<string | null>(null);
   /** Error de la última acción, junto con el trailer donde ocurrió. */
-  protected readonly errorAccion = signal<{ id: number; mensaje: string } | null>(null);
+  protected readonly errorAccion = signal<{ id: string; mensaje: string } | null>(null);
   /** Aviso después de cerrar, porque el trailer cambia de pestaña. */
   protected readonly aviso = signal<string | null>(null);
 
@@ -65,7 +65,7 @@ export class TrailersPage {
     return nombreProducto(l.producto, l.color);
   }
 
-  protected pedirCierre(id: number): void {
+  protected pedirCierre(id: string): void {
     this.errorAccion.set(null);
     this.aviso.set(null);
     this.porCerrar.set(id);

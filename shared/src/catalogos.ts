@@ -45,6 +45,39 @@ export function errorDeColor(
 
 /** Folio con ceros a la izquierda, como en los vales impresos: 324 → "00324". */
 export const DIGITOS_FOLIO = 5;
-export function formatearFolio(id: number): string {
-  return String(id).padStart(DIGITOS_FOLIO, "0");
+export function formatearFolio(folio: number): string {
+  return String(folio).padStart(DIGITOS_FOLIO, "0");
 }
+
+/** Posición del tamaño en el orden de la hoja (los desconocidos van al final). */
+export function ordenTamano(tamano: string): number {
+  const i = (TAMANOS as readonly string[]).indexOf(tamano.toUpperCase());
+  return i === -1 ? TAMANOS.length : i;
+}
+
+/** Posición del color según el catálogo del producto (los desconocidos van al final). */
+function ordenColor(producto: string, color: string | null): number {
+  if (!color) return -1;
+  const i = coloresDe(producto).indexOf(color);
+  return i === -1 ? Number.MAX_SAFE_INTEGER : i;
+}
+
+export interface LineaOrdenable {
+  producto: string;
+  color: string | null;
+  tamano: string;
+}
+
+/**
+ * Orden de las líneas de manifiesto y de ticket: producto, color (como en el
+ * catálogo) y tamaño (como en la hoja). Sustituye al orden por id, que con
+ * UUID ya no refleja el orden de captura.
+ */
+export function compararLineas(a: LineaOrdenable, b: LineaOrdenable): number {
+  return (
+    a.producto.localeCompare(b.producto, "es") ||
+    ordenColor(a.producto, a.color) - ordenColor(b.producto, b.color) ||
+    ordenTamano(a.tamano) - ordenTamano(b.tamano)
+  );
+}
+

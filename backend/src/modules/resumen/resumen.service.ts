@@ -1,3 +1,4 @@
+import { compararLineas, ordenTamano } from "@abastos/shared";
 import type {
   LiquidacionProductoDto,
   LiquidacionTrailerDto,
@@ -11,13 +12,6 @@ import { hoyCdmx, rangoDelDia } from "../../lib/fechas.js";
 import { AppError } from "../../middlewares/error-handler.js";
 
 const cero = () => new Prisma.Decimal(0);
-
-/** Orden de tamaños como en la hoja de Excel; los que no estén en la lista van al final. */
-const ORDEN_TAMANOS = ["XXL", "XL", "LG", "MD", "SM", "CH"];
-const ordenTamano = (t: string) => {
-  const i = ORDEN_TAMANOS.indexOf(t.toUpperCase());
-  return i === -1 ? ORDEN_TAMANOS.length : i;
-};
 
 // ---------- Resumen del día ----------
 
@@ -36,7 +30,12 @@ export async function resumenDelDia(fecha = hoyCdmx()): Promise<ResumenDiaDto> {
             manifiestoDetalle: {
               select: {
                 trailer: {
-                  select: { id: true, viaje: true, numero: true, invernadero: true },
+                  select: {
+                    id: true,
+                    viaje: true,
+                    numero: true,
+                    invernadero: true,
+                  },
                 },
               },
             },
@@ -54,7 +53,7 @@ export async function resumenDelDia(fecha = hoyCdmx()): Promise<ResumenDiaDto> {
   let ventas = cero();
   let cajasVendidas = 0;
   const porTrailer = new Map<
-    number,
+    string,
     { dto: Omit<ResumenDiaTrailerDto, "venta">; venta: Prisma.Decimal }
   >();
 
@@ -97,20 +96,23 @@ export async function resumenDelDia(fecha = hoyCdmx()): Promise<ResumenDiaDto> {
 // ---------- Liquidación de un trailer ----------
 
 export async function liquidacionTrailer(
-  id: number,
+  id: string,
 ): Promise<LiquidacionTrailerDto> {
   const trailer = await prisma.trailer.findUnique({
     where: { id },
     include: {
       manifiesto: {
-        orderBy: { id: "asc" },
         include: {
           ventas: {
             where: { ticket: { estado: "VIGENTE" } },
-            orderBy: { ticketId: "asc" },
             include: {
               ticket: {
-                select: { id: true, fecha: true, clienteNombre: true },
+                select: {
+                  id: true,
+                  folio: true,
+                  fecha: true,
+                  clienteNombre: true,
+                },
               },
             },
           },
@@ -118,11 +120,12 @@ export async function liquidacionTrailer(
       },
     },
   });
-  if (!trailer) throw new AppError(404, `No existe el trailer ${id}`);
+  if (!trailer) throw new AppError(404, "No existe ese trailer");
 
   // Agrupar las líneas del manifiesto por producto + color (como cada bloque de la hoja).
+  // Se ordenan antes para que los bloques salgan siempre en el mismo orden.
   const grupos = new Map<string, typeof trailer.manifiesto>();
-  for (const linea of trailer.manifiesto) {
+  for (const linea of [...trailer.manifiesto].sort(compararLineas)) {
     const nombre = [linea.producto, linea.color].filter(Boolean).join(" ");
     grupos.set(nombre, [...(grupos.get(nombre) ?? []), linea]);
   }
@@ -150,6 +153,7 @@ export async function liquidacionTrailer(
           ventaProducto = ventaProducto.add(v.subtotal);
           return {
             ticketId: v.ticket.id,
+            folio: v.ticket.folio,
             fecha: v.ticket.fecha.toISOString(),
             clienteNombre: v.ticket.clienteNombre,
             tamano: l.tamano,
@@ -159,7 +163,7 @@ export async function liquidacionTrailer(
           };
         }),
       )
-      .sort((a, b) => a.ticketId - b.ticketId);
+      .sort((a, b) => a.folio - b.folio);
 
     ventaTrailer = ventaTrailer.add(ventaProducto);
     productos.push({

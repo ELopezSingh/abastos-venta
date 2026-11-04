@@ -31,7 +31,7 @@
     <article class="vale" [class.vale--cancelado]="v.estado === 'CANCELADO'">
       <div class="vale__cabeza">
         <p class="vale__folio">
-          Folio <span class="cifra">{{ formatearFolio(v.id) }}</span>
+          Folio <span class="cifra">{{ formatearFolio(v.folio) }}</span>
         </p>
         <p class="vale__hora">{{ v.fecha | date: 'h:mm a' }}</p>
         @if (v.estado === 'CANCELADO') {
@@ -67,7 +67,7 @@
             <div
               class="confirmar"
               role="alertdialog"
-              [attr.aria-label]="'Cancelar folio ' + formatearFolio(v.id)"
+              [attr.aria-label]="'Cancelar folio ' + formatearFolio(v.folio)"
             >
               <p>Las {{ v.totalCajas | number }} cajas vuelven a quedar disponibles.</p>
               @if (errorCancelar(); as error) {

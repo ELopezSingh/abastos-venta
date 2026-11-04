@@ -8,7 +8,7 @@ export const resumenDiaQuerySchema = z.object({
 // ---------- Resumen del día ----------
 
 export interface ResumenDiaTrailerDto {
-  trailerId: number;
+  trailerId: string;
   viaje: string | null;
   numero: string;
   invernadero: string;
@@ -38,8 +38,9 @@ export interface LiquidacionTamanoDto {
 }
 
 export interface LiquidacionVentaDto {
-  /** Folio del ticket. */
-  ticketId: number;
+  ticketId: string;
+  /** Folio impreso del ticket. */
+  folio: number;
   fecha: string;
   clienteNombre: string;
   tamano: string;
@@ -59,7 +60,7 @@ export interface LiquidacionProductoDto {
 
 export interface LiquidacionTrailerDto {
   trailer: {
-    id: number;
+    id: string;
     viaje: string | null;
     numero: string;
     placa: string;

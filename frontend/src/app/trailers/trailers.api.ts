@@ -32,11 +32,11 @@ export class TrailersApi {
     return firstValueFrom(this.http.post<TrailerDto>(URL, datos));
   }
 
-  cerrar(id: number): Promise<TrailerDto> {
+  cerrar(id: string): Promise<TrailerDto> {
     return firstValueFrom(this.http.post<TrailerDto>(`${URL}/${id}/cerrar`, {}));
   }
 
-  reabrir(id: number): Promise<TrailerDto> {
+  reabrir(id: string): Promise<TrailerDto> {
     return firstValueFrom(this.http.post<TrailerDto>(`${URL}/${id}/reabrir`, {}));
   }
 }

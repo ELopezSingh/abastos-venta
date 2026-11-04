@@ -1,5 +1,6 @@
-import { z } from 'zod';
-import { cajas, importe } from './dinero.js';
+import { z } from "zod";
+import { idSchema } from "./comun.js";
+import { cajas, importe } from "./dinero.js";
 
 export const estadoTicketSchema = z.enum(["VIGENTE", "CANCELADO"]);
 export type EstadoTicket = z.infer<typeof estadoTicketSchema>;
@@ -8,19 +9,24 @@ export type EstadoTicket = z.infer<typeof estadoTicketSchema>;
 
 export const ticketLineaSchema = z.object({
   /** Línea del manifiesto de la que salen las cajas (define trailer, producto y tamaño). */
-  manifiestoDetalleId: z.number().int().positive(),
+  manifiestoDetalleId: idSchema,
   cajas,
-  precioCaja: importe.positive('El precio por caja debe ser mayor a 0'),
+  precioCaja: importe.positive("El precio por caja debe ser mayor a 0"),
 });
 
 export const crearTicketSchema = z.object({
-  clienteNombre: z.string().trim().min(1, 'El nombre del cliente es obligatorio'),
-  lineas: z.array(ticketLineaSchema).min(1, 'Agrega al menos un producto al ticket'),
+  clienteNombre: z
+    .string()
+    .trim()
+    .min(1, "El nombre del cliente es obligatorio"),
+  lineas: z
+    .array(ticketLineaSchema)
+    .min(1, "Agrega al menos un producto al ticket"),
 });
 
 export const listarTicketsQuerySchema = z.object({
   /** Día a consultar (AAAA-MM-DD). Si no se manda, se usa el día de hoy. */
-  fecha: z.iso.date('La fecha debe tener formato AAAA-MM-DD').optional(),
+  fecha: z.iso.date("La fecha debe tener formato AAAA-MM-DD").optional(),
   estado: estadoTicketSchema.optional(),
 });
 
@@ -30,9 +36,9 @@ export type CrearTicketInput = z.infer<typeof crearTicketSchema>;
 // ---------- Respuestas del API ----------
 
 export interface TicketLineaDto {
-  id: number;
-  manifiestoDetalleId: number;
-  trailer: { id: number; numero: string; anden: string };
+  id: string;
+  manifiestoDetalleId: string;
+  trailer: { id: string; numero: string; anden: string };
   producto: string;
   color: string | null;
   tamano: string;
@@ -42,8 +48,9 @@ export interface TicketLineaDto {
 }
 
 export interface TicketDto {
-  /** El id funciona como folio del ticket. */
-  id: number;
+  id: string;
+  /** Número consecutivo impreso en el ticket. */
+  folio: number;
   fecha: string;
   clienteNombre: string;
   estado: EstadoTicket;

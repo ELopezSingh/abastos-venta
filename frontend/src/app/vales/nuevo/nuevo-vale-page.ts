@@ -26,7 +26,7 @@ import { AvisoConexionGuardar } from '../../core/pwa/aviso-conexion-guardar';
 import { ConexionService } from '../../core/pwa/conexion.service';
 
 interface LineaVale {
-  manifiestoDetalleId: number;
+  manifiestoDetalleId: string;
   cajas: number;
   precioCaja: number;
 }
@@ -68,7 +68,7 @@ export class NuevoValePage {
 
   /** Productos disponibles indexados por id de línea de manifiesto. */
   protected readonly disponibles = computed(() => {
-    const mapa = new Map<number, ProductoDisponible>();
+    const mapa = new Map<string, ProductoDisponible>();
     for (const trailer of this.trailers.value()) {
       for (const linea of trailer.manifiesto) mapa.set(linea.id, { linea, trailer });
     }
@@ -112,11 +112,11 @@ export class NuevoValePage {
     return Math.round((Number(l.cajas) || 0) * (Number(l.precioCaja) || 0) * 100) / 100;
   }
 
-  protected enVale(lineaId: number): boolean {
+  protected enVale(lineaId: string): boolean {
     return this.modelo().lineas.some((l) => l.manifiestoDetalleId === lineaId);
   }
 
-  protected agregar(lineaId: number): void {
+  protected agregar(lineaId: string): void {
     if (this.enVale(lineaId)) return;
     this.modelo.update((m) => ({
       ...m,
@@ -136,7 +136,6 @@ export class NuevoValePage {
   protected async guardar(evento: SubmitEvent): Promise<void> {
     evento.preventDefault();
     this.errorServidor.set(null);
-
     await submit(this.f, async () => {
       try {
         const vale = await this.valesApi.crear(crearTicketSchema.parse(this.modelo()));

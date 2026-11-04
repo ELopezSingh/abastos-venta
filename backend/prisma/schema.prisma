@@ -19,9 +19,9 @@ enum EstadoTicket {
 }
 
 /// Trailer que llega al andén con mercancía de un invernadero.
-/// Trailer que llega al andén con mercancía de un invernadero.
 model Trailer {
-  id                 Int           @id @default(autoincrement())
+  /// UUID generado en la tablet al crear el trailer.
+  id                 String        @id @default(uuid()) @db.Uuid
   /// Nombre del viaje (ej. HORTIFRESH-01). Opcional en la base solo porque
   /// los trailers registrados antes de agregar el campo no lo tienen.
   viaje              String?
@@ -52,8 +52,8 @@ model Trailer {
 /// Cada producto/tamaño que trae el trailer. Las ventas apuntan aquí,
 /// así se sabe de qué trailer salió cada caja y cuántas quedan.
 model ManifiestoDetalle {
-  id        Int     @id @default(autoincrement())
-  trailerId Int     @map("trailer_id")
+  id        String  @id @default(uuid()) @db.Uuid
+  trailerId String  @map("trailer_id") @db.Uuid
   producto  String
   color     String?
   tamano    String
@@ -66,9 +66,11 @@ model ManifiestoDetalle {
   @@map("manifiesto_detalle")
 }
 
-/// El id funciona como folio consecutivo del ticket.
 model Ticket {
-  id            Int          @id @default(autoincrement())
+  id            String       @id @default(uuid()) @db.Uuid
+  /// Folio consecutivo impreso en el ticket. Lo asigna la tablet; los tickets
+  /// anteriores a la migración conservan su número original.
+  folio         Int          @unique
   fecha         DateTime     @default(now())
   clienteNombre String       @map("cliente_nombre")
   total         Decimal      @db.Decimal(12, 2)
@@ -82,9 +84,9 @@ model Ticket {
 }
 
 model TicketDetalle {
-  id                  Int     @id @default(autoincrement())
-  ticketId            Int     @map("ticket_id")
-  manifiestoDetalleId Int     @map("manifiesto_detalle_id")
+  id                  String  @id @default(uuid()) @db.Uuid
+  ticketId            String  @map("ticket_id") @db.Uuid
+  manifiestoDetalleId String  @map("manifiesto_detalle_id") @db.Uuid
   cajas               Int
   precioCaja          Decimal @map("precio_caja") @db.Decimal(12, 2)
   subtotal            Decimal @db.Decimal(12, 2)
@@ -95,6 +97,20 @@ model TicketDetalle {
   @@index([ticketId])
   @@index([manifiestoDetalleId])
   @@map("ticket_detalle")
+}
+
+/// Operaciones recibidas de la tablet. El id (UUID de la operación) hace que
+/// un reintento no se aplique dos veces; seq da el orden de aplicación.
+model OperacionSync {
+  id         String   @id @db.Uuid
+  seq        BigInt   @unique @default(autoincrement())
+  tipo       String
+  datos      Json
+  /// Hora en que se hizo la acción en la tablet (puede ser horas antes si no había señal).
+  creadaEn   DateTime @map("creada_en")
+  aplicadaEn DateTime @default(now()) @map("aplicada_en")
+
+  @@map("operaciones_sync")
 }
 
 model Usuario {
