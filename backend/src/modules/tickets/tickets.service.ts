@@ -1,4 +1,11 @@
-import { compararLineas, formatearFolio } from "@abastos/shared";
+import {
+  cajasPedidasPorLinea,
+  centavosATexto,
+  compararLineas,
+  prepararTicket,
+  siguienteFolio,
+  validarCancelacion,
+} from "@abastos/shared";
 import type {
   CrearTicketInput,
   EstadoTicket,
@@ -6,8 +13,9 @@ import type {
 } from "@abastos/shared";
 import { Prisma } from "../../generated/prisma/client.js";
 import { prisma } from "../../lib/prisma.js";
-import { aNumero, decimal } from "../../lib/dinero.js";
+import { aNumero } from "../../lib/dinero.js";
 import { hoyCdmx, rangoDelDia } from "../../lib/fechas.js";
+import { conReglas } from "../../lib/reglas.js";
 import { AppError } from "../../middlewares/error-handler.js";
 
 const conDetalles = {
@@ -56,15 +64,7 @@ function aDto(t: TicketConDetalles): TicketDto {
 // ---------- Casos de uso ----------
 
 export async function crearTicket(input: CrearTicketInput): Promise<TicketDto> {
-  // Cajas pedidas por línea de manifiesto (por si la misma línea viene dos veces).
-  const pedidas = new Map<string, number>();
-  for (const l of input.lineas) {
-    pedidas.set(
-      l.manifiestoDetalleId,
-      (pedidas.get(l.manifiestoDetalleId) ?? 0) + l.cajas,
-    );
-  }
-  const ids = [...pedidas.keys()].sort();
+  const ids = [...cajasPedidasPorLinea(input.lineas).keys()].sort();
 
   const ticketId = await prisma.$transaction(async (tx) => {
     // 1. Bloquear las líneas del manifiesto hasta que termine la transacción.
@@ -77,30 +77,11 @@ export async function crearTicket(input: CrearTicketInput): Promise<TicketDto> {
       ORDER BY id
       FOR UPDATE`;
 
-    // 2. Revisar que existan y que su trailer siga activo.
+    // 2. Leer las líneas y lo ya vendido (solo tickets vigentes).
     const lineas = await tx.manifiestoDetalle.findMany({
       where: { id: { in: ids } },
       include: { trailer: { select: { numero: true, estado: true } } },
     });
-    const porId = new Map(lineas.map((l) => [l.id, l]));
-
-    for (const id of ids) {
-      const linea = porId.get(id);
-      if (!linea) {
-        throw new AppError(
-          404,
-          "Uno de los productos del ticket ya no existe en el manifiesto",
-        );
-      }
-      if (linea.trailer.estado !== "ACTIVO") {
-        throw new AppError(
-          409,
-          `El trailer ${linea.trailer.numero} está cerrado; no se puede vender de él`,
-        );
-      }
-    }
-
-    // 3. Revisar existencias (solo cuentan los tickets vigentes).
     const vendidas = await tx.ticketDetalle.groupBy({
       by: ["manifiestoDetalleId"],
       where: {
@@ -109,53 +90,35 @@ export async function crearTicket(input: CrearTicketInput): Promise<TicketDto> {
       },
       _sum: { cajas: true },
     });
-    const vendidasPorId = new Map(
-      vendidas.map((v) => [v.manifiestoDetalleId, v._sum?.cajas ?? 0]),
+
+    // 3. Reglas compartidas: existencia, trailer activo, existencias e importes.
+    const { detalles, total } = conReglas(() =>
+      prepararTicket(
+        input.lineas,
+        new Map(lineas.map((l) => [l.id, l])),
+        new Map(vendidas.map((v) => [v.manifiestoDetalleId, v._sum?.cajas ?? 0])),
+      ),
     );
 
-    for (const id of ids) {
-      const linea = porId.get(id)!;
-      const disponibles = linea.cajas - (vendidasPorId.get(id) ?? 0);
-      const solicitadas = pedidas.get(id)!;
-      if (solicitadas > disponibles) {
-        const nombre = [linea.producto, linea.color, linea.tamano]
-          .filter(Boolean)
-          .join(" ");
-        throw new AppError(
-          409,
-          `Solo quedan ${disponibles} cajas de ${nombre} (trailer ${linea.trailer.numero}); se pidieron ${solicitadas}`,
-        );
-      }
-    }
-
-    // 4. Calcular subtotales y total con Decimal (sin errores de redondeo).
-    const detalles = input.lineas.map((l) => {
-      const precioCaja = decimal(l.precioCaja);
-      return {
-        manifiestoDetalleId: l.manifiestoDetalleId,
-        cajas: l.cajas,
-        precioCaja,
-        subtotal: precioCaja.mul(l.cajas),
-      };
-    });
-    const total = detalles.reduce(
-      (acc, d) => acc.add(d.subtotal),
-      new Prisma.Decimal(0),
-    );
-
-    // 5. Folio consecutivo. El candado (se libera al terminar la transacción)
+    // 4. Folio consecutivo. El candado (se libera al terminar la transacción)
     //    evita que dos ventas simultáneas tomen el mismo número.
     await tx.$queryRaw`SELECT 1 AS ok FROM pg_advisory_xact_lock(4242)`;
     const { _max } = await tx.ticket.aggregate({ _max: { folio: true } });
-    const folio = (_max.folio ?? 0) + 1;
 
-    // 6. Guardar ticket y detalles.
+    // 5. Guardar ticket y detalles (los centavos se guardan como texto exacto).
     const ticket = await tx.ticket.create({
       data: {
-        folio,
+        folio: siguienteFolio(_max.folio),
         clienteNombre: input.clienteNombre,
-        total,
-        detalles: { create: detalles },
+        total: centavosATexto(total),
+        detalles: {
+          create: detalles.map((d) => ({
+            manifiestoDetalleId: d.manifiestoDetalleId,
+            cajas: d.cajas,
+            precioCaja: centavosATexto(d.precioCaja),
+            subtotal: centavosATexto(d.subtotal),
+          })),
+        },
       },
       select: { id: true },
     });
@@ -193,12 +156,7 @@ export async function cancelarTicket(id: string): Promise<TicketDto> {
     select: { estado: true, folio: true },
   });
   if (!ticket) throw new AppError(404, "No existe ese ticket");
-  if (ticket.estado === "CANCELADO") {
-    throw new AppError(
-      409,
-      `El ticket ${formatearFolio(ticket.folio)} ya estaba cancelado`,
-    );
-  }
+  conReglas(() => validarCancelacion(ticket));
 
   await prisma.ticket.update({ where: { id }, data: { estado: "CANCELADO" } });
   return obtenerTicket(id);
