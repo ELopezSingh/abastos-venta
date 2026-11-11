@@ -13,3 +13,4 @@ export * from './catalogos.js';
 export * from './auth.js';
 export * from './errores.js';
 export * from './reglas/index.js';
+export * from './operaciones.js';
