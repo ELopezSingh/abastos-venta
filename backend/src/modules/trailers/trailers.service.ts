@@ -97,9 +97,9 @@ function aDto(t: TrailerConManifiesto, vendidas: Map<string, number>): TrailerDt
   };
 }
 
-async function aDtos(trailers: TrailerConManifiesto[]): Promise<TrailerDto[]> {
+async function aDtos(trailers: TrailerConManifiesto[], db: Db = prisma): Promise<TrailerDto[]> {
   const ids = trailers.flatMap((t) => t.manifiesto.map((l) => l.id));
-  const vendidas = await vendidasPorLinea(prisma, ids);
+  const vendidas = await vendidasPorLinea(db, ids);
   return trailers.map((t) => aDto(t, vendidas));
 }
 
@@ -262,13 +262,23 @@ export async function crearTrailer(input: CrearTrailerInput): Promise<TrailerDto
   return obtenerTrailer(id);
 }
 
-export async function listarTrailers(estado?: EstadoTrailer): Promise<TrailerDto[]> {
-  const trailers = await prisma.trailer.findMany({
-    where: estado ? { estado } : undefined,
+/** Trailers con su manifiesto y existencias (también lo usa el snapshot). */
+export async function buscarTrailers(
+  db: Db,
+  where: Prisma.TrailerWhereInput = {},
+): Promise<TrailerDto[]> {
+  const trailers = await db.trailer.findMany({
+    where,
     include: conManifiesto,
-    orderBy: { fechaLlegada: 'desc' },
+    orderBy: { fechaLlegada: "desc" },
   });
-  return aDtos(trailers);
+  return aDtos(trailers, db);
+}
+
+export async function listarTrailers(
+  estado?: EstadoTrailer,
+): Promise<TrailerDto[]> {
+  return buscarTrailers(prisma, estado ? { estado } : {});
 }
 
 export async function obtenerTrailer(id: string): Promise<TrailerDto> {

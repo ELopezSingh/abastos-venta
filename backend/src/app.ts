@@ -11,12 +11,17 @@ import { resumenRouter } from "./modules/resumen/resumen.routes.js";
 import cookieParser from "cookie-parser";
 import { authRouter } from "./modules/auth/auth.routes.js";
 import { requiereSesion } from "./middlewares/requiere-sesion.js";
+import { syncRouter } from './modules/sync/sync.routes.js';
 
 export const app = express();
 
 app.set("trust proxy", 1);
 
 app.use(cors({ origin: env.CORS_ORIGIN, exposedHeaders: ["Date"] }));
+// /api/sync recibe lotes de operaciones: necesita un límite mayor que el
+// resto (100 kb por defecto). Va antes del general; el segundo ve que el
+// cuerpo ya se leyó y no lo vuelve a procesar.
+app.use("/api/sync", express.json({ limit: "1mb" }));
 app.use(express.json());
 app.use(cookieParser());
 
@@ -28,6 +33,7 @@ app.use("/api", requiereSesion);
 app.use("/api/trailers", trailersRouter);
 app.use("/api/tickets", ticketsRouter);
 app.use("/api/resumen", resumenRouter);
+app.use('/api/sync', syncRouter);
 
 // ---- Frontend (solo si existe el build: en `npm run dev` no hace nada) ----
 const dirFrontend = path.resolve(

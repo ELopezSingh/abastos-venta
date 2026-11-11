@@ -14,3 +14,4 @@ export * from './auth.js';
 export * from './errores.js';
 export * from './reglas/index.js';
 export * from './operaciones.js';
+export * from './sync.js';

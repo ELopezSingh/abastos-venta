@@ -175,14 +175,28 @@ export async function crearTicket(input: CrearTicketInput): Promise<TicketDto> {
   return obtenerTicket(id);
 }
 
-export async function listarTickets(fecha?: string, estado?: EstadoTicket): Promise<TicketDto[]> {
-  const { desde, hasta } = rangoDelDia(fecha ?? hoyCdmx());
-  const tickets = await prisma.ticket.findMany({
-    where: { fecha: { gte: desde, lt: hasta }, ...(estado && { estado }) },
+/** Tickets con sus líneas, del folio más alto al más bajo (también lo usa el snapshot). */
+export async function buscarTickets(
+  db: Db,
+  where: Prisma.TicketWhereInput,
+): Promise<TicketDto[]> {
+  const tickets = await db.ticket.findMany({
+    where,
     include: conDetalles,
-    orderBy: { folio: 'desc' },
+    orderBy: { folio: "desc" },
   });
   return tickets.map(aDto);
+}
+
+export async function listarTickets(
+  fecha?: string,
+  estado?: EstadoTicket,
+): Promise<TicketDto[]> {
+  const { desde, hasta } = rangoDelDia(fecha ?? hoyCdmx());
+  return buscarTickets(prisma, {
+    fecha: { gte: desde, lt: hasta },
+    ...(estado && { estado }),
+  });
 }
 
 export async function obtenerTicket(id: string): Promise<TicketDto> {
