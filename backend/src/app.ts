@@ -11,14 +11,24 @@ import { resumenRouter } from "./modules/resumen/resumen.routes.js";
 import cookieParser from "cookie-parser";
 import { authRouter } from "./modules/auth/auth.routes.js";
 import { requiereSesion } from "./middlewares/requiere-sesion.js";
+import { syncRouter } from './modules/sync/sync.routes.js';
+import { esperarBaseDeDatos } from "./middlewares/esperar-base-de-datos.js";
 
 export const app = express();
 
 app.set("trust proxy", 1);
 
 app.use(cors({ origin: env.CORS_ORIGIN, exposedHeaders: ["Date"] }));
+// /api/sync recibe lotes de operaciones: necesita un límite mayor que el
+// resto (100 kb por defecto). Va antes del general; el segundo ve que el
+// cuerpo ya se leyó y no lo vuelve a procesar.
+app.use("/api/sync", express.json({ limit: "1mb" }));
 app.use(express.json());
 app.use(cookieParser());
+
+// Antes de cualquier ruta /api (también auth, que consulta la base):
+// si el servidor acaba de despertar, espera a que la base responda.
+app.use("/api", esperarBaseDeDatos);
 
 app.use("/api/health", healthRouter);
 app.use("/api/auth", authRouter);
@@ -28,6 +38,7 @@ app.use("/api", requiereSesion);
 app.use("/api/trailers", trailersRouter);
 app.use("/api/tickets", ticketsRouter);
 app.use("/api/resumen", resumenRouter);
+app.use('/api/sync', syncRouter);
 
 // ---- Frontend (solo si existe el build: en `npm run dev` no hace nada) ----
 const dirFrontend = path.resolve(
