@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
 import { ActualizacionesService } from './actualizaciones.service';
 import { ConexionService } from './conexion.service';
+import { EstadoServidorService } from '../estado-servidor.service';
 
 @Component({
   selector: 'app-barra-estado-pwa',
@@ -10,6 +11,11 @@ import { ConexionService } from './conexion.service';
       <div class="barra sin-red" role="status">
         Sin conexión. Puedes abrir la app, pero no guardar ni consultar datos hasta que regrese la
         señal.
+      </div>
+    }
+    @if (conexion.enLinea() && servidor.despertando()) {
+      <div class="barra despertando" role="status">
+        El servidor está despertando. Reintentando en unos segundos…
       </div>
     }
     @if (actualizaciones.hayNuevaVersion()) {
@@ -39,6 +45,10 @@ import { ConexionService } from './conexion.service';
       background: #fef3c7;
       color: #78350f;
     }
+    .despertando {
+      background: #e0f2fe;
+      color: #075985;
+    }
     .nueva-version {
       background: #dbeafe;
       color: #1e3a8a;
@@ -56,4 +66,5 @@ import { ConexionService } from './conexion.service';
 export class BarraEstadoPwa {
   protected readonly conexion = inject(ConexionService);
   protected readonly actualizaciones = inject(ActualizacionesService);
+  protected readonly servidor = inject(EstadoServidorService);
 }

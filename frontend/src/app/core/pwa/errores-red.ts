@@ -1,10 +1,10 @@
-import { HttpResponse } from '@angular/common/http';
+import { HttpErrorResponse } from '@angular/common/http';
 
 export const SIN_CONEXION_PREVIA = 'SIN_CONEXION_PREVIA';
 
 export function esErrorDeConexion(error: unknown): boolean {
   if (!navigator.onLine) return true;
-  if (error instanceof HttpResponse) {
+  if (error instanceof HttpErrorResponse) {
     // 0: la petición no llegó o no hubo respuesta
     // 504: lo que devuelve el service worker cuando no hay red ni copia guardada
     return error.status === 0 || error.status === 504;
@@ -19,7 +19,7 @@ export function mensajeErrorCarga(error: unknown): string {
 }
 
 export function mensajeErrorGuardado(error: unknown): string | null {
-  if (error instanceof HttpResponse && error.statusText === SIN_CONEXION_PREVIA) {
+  if (error instanceof HttpErrorResponse && error.statusText === SIN_CONEXION_PREVIA) {
     return 'No hay conexión. No se guardó nada; inténtalo cuando regrese la señal.';
   }
   if (esErrorDeConexion(error)) {
