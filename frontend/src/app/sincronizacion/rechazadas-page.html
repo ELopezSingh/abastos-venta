@@ -1,0 +1,65 @@
+<header class="encabezado">
+  <h1>Sincronización</h1>
+  <button type="button" class="boton boton--secundario" (click)="actualizar()">Actualizar</button>
+</header>
+
+<section class="contacto" aria-label="Último contacto de la tablet">
+  @if (estado()?.ultimoContacto; as ultimo) {
+  <p>
+    Última sincronización de la tablet: <strong>{{ hace() }}</strong>
+    <span class="contacto__fecha">&ngsp;({{ ultimo | date: "d MMM, h:mm a" }})</span>
+  </p>
+  } @else if (estado()) {
+  <p>La tablet todavía no ha sincronizado.</p>
+  } @else {
+  <p class="vacio">Consultando…</p>
+  }
+</section>
+
+<h2>Operaciones rechazadas</h2>
+<p class="explicacion">
+  La tablet hizo estas acciones, pero el servidor no las aceptó. No cuentan en vales, resumen ni
+  liquidaciones hasta que se corrijan en la tablet.
+</p>
+
+<app-datos-guardados [headers]="rechazadas.headers()" />
+
+@if (rechazadas.error()) {
+<div class="aviso">
+  <p>{{ mensajeDeError(rechazadas.error()) }}</p>
+  <button type="button" class="boton boton--secundario" (click)="rechazadas.reload()">
+    Volver a intentar
+  </button>
+</div>
+} @else if (rechazadas.hasValue()) {
+@if (rechazadas.value().total > operaciones().length) {
+<p class="explicacion">
+  Se muestran las {{ operaciones().length }} más recientes de {{ rechazadas.value().total }}.
+</p>
+}
+
+@for (op of operaciones(); track op.id) {
+<article class="rechazo">
+  <h3>{{ op.titulo }}</h3>
+  @if (op.detalle) {
+  <p class="rechazo__detalle">{{ op.detalle }}</p>
+  }
+  <p class="rechazo__motivo">{{ op.motivo }}</p>
+  <p class="rechazo__meta">
+    <span>Hecha en la tablet: {{ op.creadaEn | date: "d MMM, h:mm a" }}</span>
+    <span>{{ op.intentos }} {{ op.intentos === 1 ? 'intento' : 'intentos' }}</span>
+    @if (op.intentos > 1) {
+    <span>Último: {{ op.ultimaVez | date: "d MMM, h:mm a" }}</span>
+    }
+  </p>
+  <details>
+    <summary>Ver datos</summary>
+    <pre>{{ op.datos | json }}</pre>
+  </details>
+</article>
+} @empty {
+<p class="vacio">No hay operaciones rechazadas.</p>
+}
+} @else {
+<p class="vacio">Cargando…</p>
+}

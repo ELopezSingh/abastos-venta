@@ -1,6 +1,8 @@
 <header class="encabezado">
   <h1>Trailers</h1>
-  <a class="boton" routerLink="/trailers/nuevo">Registrar trailer</a>
+  @if (captura) {
+    <a class="boton" routerLink="/trailers/nuevo">Registrar trailer</a>
+  }
 </header>
 
 <div class="filtro" role="group" aria-label="Filtrar por estado">
@@ -81,14 +83,14 @@
           >Ver liquidación</a
         >
 
-        @if (porCerrar() !== t.id) {
+         @if (captura && porCerrar() !== t.id) {
           <button type="button" class="boton boton--secundario" (click)="pedirCierre(t.id)">
             Cerrar trailer
           </button>
         }
       </div>
 
-      @if (porCerrar() === t.id) {
+      @if (captura && porCerrar() === t.id) {
         <div class="confirmar" role="alertdialog" [attr.aria-label]="'Cerrar trailer ' + t.numero">
           @if (t.totales.disponibles > 0) {
             <p>
@@ -126,8 +128,12 @@
     </article>
   } @empty {
     <div class="vacio">
-      <p>No hay trailers en el andén. Registra el siguiente cuando llegue.</p>
-      <a class="boton" routerLink="/trailers/nuevo">Registrar trailer</a>
+      @if (captura) {
+        <p>No hay trailers en el andén. Registra el siguiente cuando llegue.</p>
+        <a class="boton" routerLink="/trailers/nuevo">Registrar trailer</a>
+      } @else {
+        <p>No hay trailers en el andén.</p>
+      }
     </div>
   }
 }

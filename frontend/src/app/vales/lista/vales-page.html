@@ -62,7 +62,7 @@
           Total <span class="cifra">{{ v.total | currency }}</span>
         </p>
 
-        @if (v.estado === 'VIGENTE') {
+        @if (captura && v.estado === 'VIGENTE') {
           @if (porCancelar() === v.id) {
             <div
               class="confirmar"
@@ -106,7 +106,9 @@
       <div class="vacio">
         @if (esHoy()) {
           <p>Todavía no hay vales hoy.</p>
-          <a class="boton" routerLink="/vender">Hacer un vale</a>
+          @if (captura) {
+            <a class="boton" routerLink="/vender">Hacer un vale</a>
+          }
         } @else {
           <p>No hubo vales este día.</p>
         }

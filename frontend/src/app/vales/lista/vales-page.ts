@@ -11,6 +11,7 @@ import { SelectorDia } from '../../core/selector-dia';
 import { DatosGuardados } from '../../core/pwa/datos-guardados';
 import { AvisoConexionGuardar } from '../../core/pwa/aviso-conexion-guardar';
 import { ConexionService } from '../../core/pwa/conexion.service';
+import { CAPTURA_HABILITADA } from '../../core/captura';
 
 @Component({
   selector: 'app-vales-page',
@@ -30,6 +31,8 @@ export class ValesPage {
   private readonly api = inject(ValesApi);
 
   protected readonly conexion = inject(ConexionService);
+
+  protected readonly captura = CAPTURA_HABILITADA;
 
   protected readonly fecha = signal(hoyCdmx());
   protected readonly vales = this.api.listar(this.fecha);
