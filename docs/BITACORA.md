@@ -13,16 +13,17 @@ Estado actual, decisiones y registro de trabajo de la app de ventas. Complementa
 
 ## Estado actual
 
-*Actualizado: 12 de noviembre de 2026*
+*Actualizado: 12 de noviembre de 2026 (paso 3 terminado)*
 
 | | |
 |---|---|
-| **Producción** | v1.2.0 en Railway (rama `main`), desplegada el 12 nov 2026. |
+| **Producción** | v1.2.0 en Railway (rama `main`), desplegada y verificada el 12 nov 2026, con su tag `v1.2.0` en GitHub. |
 | **Uso real** | El tío ya captura ventas reales en producción. |
 | **Dispositivos** | APK probado en un dispositivo Android (login contra Railway). La tablet Samsung del tío y la impresora están pendientes de compra/definición. La web se usa desde el iPhone. |
 | **Desarrollo** | PostgreSQL local con pgAdmin 4, con una copia restaurada del respaldo de producción. |
-| **Siguiente paso** | Paso 3 del plan sin conexión: web en modo solo lectura (nueva rama desde `develop`). |
-| **Pendiente de git** | Crear el tag `v1.2.0` sobre `main` cuando se confirme la revisión en producción. |
+| **Siguiente paso** | Probar el APK con los cambios del paso 3 (en el equipo de casa: la red de la oficina no deja descargar Gradle). Después, merge de `feature/web-solo-lectura` a `develop` y publicar. Luego, el paso 4. |
+| **Pendiente de git** | Merge de `feature/web-solo-lectura` (paso 3, tres commits) a `develop`. |
+| **Para el paso 4** | Una operación rechazada solo sale de la lista si la tablet la reenvía y se aplica. Falta decidir cómo descartar las que no se van a reintentar; como la web es de solo lectura, sería desde la tablet. |
 
 ### Plan: la tablet captura sin conexión
 
@@ -30,8 +31,8 @@ Estado actual, decisiones y registro de trabajo de la app de ventas. Complementa
 |---|---|---|
 | 1 | Reglas de negocio en `@abastos/shared` (funciones puras, dinero en centavos, `ErrorDeRegla`, pruebas) | ✅ v1.2.0 |
 | 2 | Backend: `POST /api/sync`, `GET /api/sync/snapshot`, rechazos y último contacto, arranque en frío | ✅ v1.2.0 |
-| 3 | Web solo lectura, "Última sincronización de la tablet: hace X", vista de rechazos, reintento ante 503 | ⏳ Siguiente |
-| 4 | Tablet: SQLite, cola de operaciones, sincronización, rechazadas, snapshot, aviso de reloj | Pendiente |
+| 3 | Web solo lectura, "Última sincronización de la tablet: hace X", vista de rechazos, reintento ante 503 | ✅ En `feature/web-solo-lectura` (sin publicar; falta probar el APK) |
+| 4 | Tablet: SQLite, cola de operaciones, sincronización, rechazadas, snapshot, aviso de reloj | ⏳ Siguiente |
 | — | Impresora térmica (hardware sin definir) | Después |
 
 ---
@@ -60,16 +61,31 @@ Estado actual, decisiones y registro de trabajo de la app de ventas. Complementa
 | 2026-11-10 | "Última sincronización" = último contacto de la tablet, aunque no traiga operaciones (`estado_sync`). | Si dice "hace 2 min", la web está al día aunque no haya ventas nuevas. |
 | 2026-11-10 | Arranque en frío: el backend espera a la base y responde 503 con mensaje; no se reintenta dentro de transacciones. | Repetir una consulta dentro de una transacción rota no sirve; `/api/sync` es idempotente y la tablet puede reintentar el lote. |
 | 2026-11-11 | Desplegar el paso 2 antes del paso 3. No cambiar la rama de producción para probar; el tag se crea después de verificar en producción. | La migración solo agrega tablas y el arreglo del arranque en frío ayuda desde ya. El rollback se hace desde Railway. |
+| 2026-11-12 | En el paso 3, el modo solo lectura va solo en el frontend, con `capturaHabilitada` en los environments. Las rutas REST de escritura se apagan en el backend al final del paso 4. | El APK todavía captura con las rutas REST; `/api/sync` lo empieza a usar en el paso 4. |
+| 2026-11-12 | En la web, `/vender` y `/trailers/nuevo` se quitan con `canMatch` y caen a Inicio. La lógica de cerrar, reabrir y cancelar se queda en los componentes, solo oculta. | Es el mismo código para web y APK; el APK la sigue usando. |
+| 2026-11-12 | El aviso "Última sincronización" no se muestra si la tablet nunca ha sincronizado; se pone amarillo después de 30 min y se revisa cada minuto solo con la app visible. | Hasta el paso 4 el APK no usa `/api/sync`: "nunca sincronizó" haría creer que la web está atrasada. Revisar solo con la app visible evita mantener despierto Railway. |
+| 2026-11-12 | `GET /api/sync/rechazadas` devuelve las 100 más recientes y el total; los datos se muestran tal como llegaron. | Los rechazos deben ser pocos; un dato mal formado es justo lo que hay que poder revisar. |
+| 2026-11-12 | El reintento ante 503 es solo para consultas (GET) y el login. | Un POST que guarda pudo aplicarse antes de que se cayera la conexión; repetirlo a ciegas podría duplicar un vale. |
+| 2026-11-12 | Al arrancar, solo un 401 cierra la sesión. Con usuario guardado la app abre sin esperar `/api/auth/yo`. | Con el servidor dormido, esperar dejaba la pantalla en blanco hasta un minuto y un 503 mandaba al login. |
 
 ---
 
 ## Registro
+
+### 2026-11-12 — Paso 3: web solo lectura (rama `feature/web-solo-lectura`)
+
+- **3a** (backend): `GET /api/sync/estado` y `GET /api/sync/rechazadas`, sin migración. DTOs en `shared/src/sync.ts`. `probar-sync.ts` con 6 comprobaciones nuevas y `sync.http`.
+- **3b** (frontend): `capturaHabilitada` en los environments y `core/captura.ts`. Rutas de captura con `canMatch`, pantallas Inicio y Sincronización, aviso de la tablet bajo la barra superior y botones de captura ocultos en la web. Pruebas de `haceCuanto` y `describirOperacion`. Se corrigió `app.spec.ts`, que ya fallaba por `SwUpdate`.
+- **3c** (frontend): interceptor `reintento503Interceptor` y `EstadoServidorService` con la barra "El servidor está despertando…". Al probar el arranque en frío se encontraron dos fallas y se corrigieron: un 503 al abrir mandaba al login (`errores-red.ts` usaba `HttpResponse` en lugar de `HttpErrorResponse`) y la app se quedaba en blanco esperando `/api/auth/yo`.
+- Validado en local: builds de web y android, `npm test -w shared`, `probar-sync.ts`, pruebas del frontend (18), peticiones de `sync.http` y desde la consola, rechazos y aviso amarillo, y PostgreSQL detenido y reiniciado con la app abierta.
+- No se pudo generar el APK: la red de la oficina no deja descargar Gradle. Queda pendiente probarlo en el equipo de casa.
 
 ### 2026-11-12 — v1.2.0 en producción y documentación
 
 - Respaldo de producción con pgAdmin antes del despliegue.
 - Merge `feature/sync` → `develop` → `main`. El pre-deploy aplicó `20261111222142_sync_rechazos_y_contacto` y la revisión en producción salió bien.
 - Documentación: README actualizado a v1.2.0, nuevo CHANGELOG y esta bitácora.
+- Tag `v1.2.0` creado sobre `main` y subido a GitHub después de verificar producción.
 
 ### 2026-11-11 — Paso 2: sincronización en el backend
 
@@ -115,3 +131,6 @@ Estado actual, decisiones y registro de trabajo de la app de ventas. Complementa
 - En producción no se venden vales de prueba: un folio usado no se recupera.
 - El tag de una versión se crea después de verificarla en producción.
 - No escribir datos sensibles en código, documentos, commits ni chats.
+- La web local también es de solo lectura (`npm run dev` usa `environment.ts`). Para capturar en local, cambiar `capturaHabilitada` a `true` temporalmente y regresarlo con `git restore frontend/src/environments/environment.ts` antes del commit.
+- Los errores de `HttpClient` son `HttpErrorResponse`, no `HttpResponse`: un `instanceof HttpResponse` nunca los detecta.
+- Generar el APK por primera vez descarga Gradle (~200 MB); si la red lo bloquea, hacerlo desde otra red.

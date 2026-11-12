@@ -6,7 +6,33 @@ El estado del proyecto, las decisiones y el registro de trabajo están en [docs/
 
 ## [Sin publicar]
 
-Nada todavía. Lo siguiente es el paso 3 del plan sin conexión: la web en modo solo lectura.
+Paso 3 del plan sin conexión: la web queda de solo lectura, muestra cuándo sincronizó la tablet y las operaciones rechazadas, y reintenta sola cuando el servidor está despertando. Está en la rama `feature/web-solo-lectura`. Falta probar el APK con estos cambios antes de publicarlo.
+
+### Agregado
+
+- `GET /api/sync/estado`: último contacto de la tablet y número de operaciones rechazadas. Consultarlo no cuenta como contacto.
+- `GET /api/sync/rechazadas`: rechazos con motivo, intentos y hora de la tablet, los más recientes primero (hasta 100), más el total.
+- `shared`: `EstadoSyncDto`, `OperacionRechazadaDto`, `OperacionesRechazadasDto` y `MAX_RECHAZADAS_LISTA`.
+- Web: pantalla **Inicio** (`/inicio`) con las ventas del día y los trailers en el andén.
+- Web: aviso "Última sincronización de la tablet: hace X" bajo la barra superior. Se revisa cada minuto mientras la app está visible, se pone en amarillo después de 30 minutos y no aparece si la tablet nunca ha sincronizado. Lleva a la pantalla de Sincronización.
+- Pantalla **Sincronización** (`/sincronizacion`): último contacto y operaciones rechazadas con su descripción (venta, alta de trailer, cierre…), motivo, intentos y los datos tal como llegaron.
+- Reintento automático ante un 503 del servidor (arranque en frío de Railway): las consultas y el login se reintentan hasta 3 veces según `Retry-After`, con la barra "El servidor está despertando…". Lo que guarda no se reintenta solo, para no duplicar vales.
+- Pruebas del frontend: `haceCuanto`, `describirOperacion` y el interceptor de reintento.
+- `probar-sync.ts` revisa también el estado, la lista de rechazadas y que una rechazada salga de la lista al aplicarse.
+- `backend/src/requests/sync.http`.
+
+### Cambiado
+
+- La web es de **solo lectura**. `capturaHabilitada` en los environments (`false` en la web y `true` en el APK) decide qué se muestra. En la web, `/vender` y `/trailers/nuevo` no existen (`canMatch`) y mandan a Inicio. Se ocultan registrar, cerrar y reabrir trailers y cancelar vales. El APK no cambia.
+- La web inicia en Inicio y su menú es Inicio · Trailers · Vales · Resumen. En el APK sigue iniciando en Vender.
+- Al abrir la app con un usuario guardado, ya no espera a `/api/auth/yo`: abre de inmediato y revisa la sesión en segundo plano.
+- Las rutas REST de escritura siguen activas en el backend, porque el APK todavía captura con ellas. Se apagan al final del paso 4.
+
+### Corregido
+
+- Un 503 al abrir la app (servidor despertando) borraba el usuario y mandaba al login. Ahora solo un 401 cierra la sesión.
+- `core/pwa/errores-red.ts` revisaba `instanceof HttpResponse`, que nunca coincide con un error de `HttpClient` (`HttpErrorResponse`). Por eso el login y Ajustes mostraban "Ocurrió un error inesperado" cuando no había conexión.
+- La prueba `app.spec.ts` fallaba por no tener proveedor de `SwUpdate`.
 
 ## [1.2.0] — 2026-11-12
 
