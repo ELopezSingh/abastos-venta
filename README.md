@@ -1,8 +1,11 @@
 # Ventas Abastos — Documentación del proyecto
 
-App web (PWA) para registrar las ventas de chile que hace el tío desde el andén en la Central de Abastos de la CDMX. Sustituye los vales escritos a mano y la hoja de Excel con la que se liquida cada viaje a los jefes.
+App para registrar las ventas de chile que hace el tío desde el andén en la Central de Abastos de la CDMX. Sustituye los vales escritos a mano y la hoja de Excel con la que se liquida cada viaje a los jefes. Funciona como app web instalable (PWA) y como APK de Android (Capacitor).
 
-> Estado al 29 de octubre de 2026: funciones base terminadas, soporte sin conexión (niveles 1 y 2) terminado, login terminado y probado. **Se está realizando un deploy demo en railway con plan Free**
+> **Estado al 12 de noviembre de 2026:** versión **v1.2.0** en producción (Railway). El tío ya captura ventas reales. El backend ya tiene la sincronización para el modo sin conexión de la tablet (`/api/sync`); faltan la web en modo solo lectura (paso 3) y la tablet con base local (paso 4).
+>
+> - Qué cambió en cada versión: [CHANGELOG.md](CHANGELOG.md)
+> - Estado del proyecto, decisiones y registro de trabajo: [docs/BITACORA.md](docs/BITACORA.md)
 
 ---
 
@@ -17,27 +20,29 @@ App web (PWA) para registrar las ventas de chile que hace el tío desde el andé
 7. [Reglas de negocio](#7-reglas-de-negocio)
 8. [Frontend: pantallas y navegación](#8-frontend-pantallas-y-navegación)
 9. [Autenticación](#9-autenticación)
-10. [Funcionamiento sin conexión (PWA)](#10-funcionamiento-sin-conexión-pwa)
+10. [Funcionamiento sin conexión](#10-funcionamiento-sin-conexión)
 11. [Cómo clonar y levantar el proyecto](#11-cómo-clonar-y-levantar-el-proyecto)
 12. [Scripts disponibles](#12-scripts-disponibles)
-13. [Pruebas manuales](#13-pruebas-manuales)
+13. [Pruebas](#13-pruebas)
 14. [Problemas conocidos y soluciones](#14-problemas-conocidos-y-soluciones)
-15. [Pendientes y siguientes pasos](#15-pendientes-y-siguientes-pasos)
+15. [Despliegue, versiones y respaldos](#15-despliegue-versiones-y-respaldos)
+16. [Pendientes y siguientes pasos](#16-pendientes-y-siguientes-pasos)
 
 ---
 
 ## 1. Qué hace la app
 
 - **Registrar trailers** que llegan al andén, con su manifiesto (producto, color, tamaño y número de cajas) y sus gastos (piso, flete, descarga y porcentaje de comisión).
-- **Vender**: generar vales (tickets) para un cliente con una o varias líneas, validando en tiempo real que haya cajas disponibles.
+- **Vender**: generar vales (tickets) para un cliente con una o varias líneas, validando en tiempo real que haya cajas disponibles. Cada vale lleva un **folio consecutivo**.
 - **Consultar y cancelar vales** del día. Un vale cancelado no se borra: queda marcado y sus cajas regresan al inventario.
+- **Corregir el manifiesto** de un trailer: editar, agregar o eliminar líneas, sin bajar de lo ya vendido.
 - **Cerrar y reabrir trailers**. Los cerrados se consultan en una pestaña aparte con buscador y paginación.
 - **Resumen del día**: vales, cajas, ventas, gastos de andén y ganancia, además de lo vendido por cada trailer.
-- **Liquidación por trailer**: el equivalente a la hoja de Excel del tío (ventas por producto y tamaño, gastos y balance), imprimible o guardable como PDF desde el iPhone.
-- **Funciona con mala señal**: la app abre sin red y muestra los últimos datos consultados. Para guardar sí se necesita conexión.
+- **Liquidación por trailer**: el equivalente a la hoja de Excel del tío (ventas por producto y tamaño, gastos y balance), imprimible o guardable como PDF.
+- **Funciona con mala señal**: la web abre sin red y muestra los últimos datos consultados. La tablet (en desarrollo, ver [sección 10](#10-funcionamiento-sin-conexión)) podrá vender sin señal y sincronizar después.
 - **Login** de un solo usuario. El usuario se crea por comando y no hay pantalla de registro.
 
-El tío usa un **iPhone y un iPad**, un dispositivo a la vez, con datos móviles. Por eso es una app web instalable (PWA) y no una app nativa, lo que también evita la licencia anual de desarrollador de Apple.
+**Dispositivos.** El tío va a capturar en una **tablet Samsung (Android)** con el APK. Se eligió Android en lugar del iPad por compatibilidad y para evitar la licencia anual de desarrollador de Apple. La versión web se conserva para que pueda **consultar** desde su iPhone. Hoy (v1.2.0) las dos versiones todavía permiten capturar; en el paso 3 del plan la web queda solo de lectura y capturar será exclusivo de la tablet. Nunca se captura en dos dispositivos a la vez.
 
 ---
 
@@ -64,17 +69,21 @@ Todo el proyecto está en **TypeScript**, en un monorepo con **npm workspaces**.
 
 | Paquete | Tecnología | Rol |
 |---|---|---|
-| `shared` (`@abastos/shared`) | TypeScript + Zod 4 | Esquemas de validación, tipos DTO, catálogos y utilidades que usan back y front. Zod está configurado en español. |
-| `backend` | Node 24 + Express 5 + Prisma 7 + PostgreSQL | API REST bajo `/api`. |
-| `frontend` | Angular 22 (zoneless, signals, Signal Forms, `httpResource`) + `@angular/service-worker` | PWA para iPhone/iPad. |
+| `shared` (`@abastos/shared`) | TypeScript + Zod 4 + Vitest | Esquemas de validación, DTOs, catálogos, **reglas de negocio** (funciones puras) y aritmética de dinero. Lo usan back, web y tablet. Zod está configurado en español. |
+| `backend` | Node 24 + Express 5 + Prisma 7 + PostgreSQL | API REST bajo `/api`, incluida la sincronización de la tablet. En producción también sirve el build de Angular. |
+| `frontend` | Angular 22 (zoneless, signals, Signal Forms, `httpResource`) + `@angular/service-worker` + Capacitor 8 | PWA para el navegador y APK de Android para la tablet, con el mismo código. |
 
 Decisiones clave:
 
-- **Importes como `Decimal(12,2)`** en la base. Los subtotales y totales siempre los calcula el backend con el `Decimal` de Prisma. El frontend nunca es la fuente de verdad para el dinero.
-- **Rutas relativas `/api/...`** en todo el frontend. En desarrollo, el proxy de Angular (`proxy.conf.json`) las manda a `http://localhost:3000`. En producción, Express servirá el build de Angular en el mismo origen, así que no habrá CORS y la cookie de sesión será *first-party*.
-- **Prisma 7**: la URL de conexión vive en `backend/prisma.config.ts` (no en `schema.prisma`), el cliente se genera en `backend/src/generated/prisma` (ignorado en git) y se conecta con el adaptador `@prisma/adapter-pg`.
+- **Dinero.** En la base, los importes son `Decimal(12,2)`. Las reglas de `shared` calculan en **centavos enteros** (`shared/src/dinero.ts`): exactos y sin dependencias, y la tablet los podrá guardar así en SQLite. El backend convierte solo en la frontera: `centavosDe()` al leer (`backend/src/lib/dinero.ts`) y `centavosATexto()` al guardar. La comisión se redondea al centavo "mitad hacia arriba", igual que `Decimal.toDecimalPlaces(2)`. El frontend nunca es la fuente de verdad del dinero.
+- **Reglas de negocio en `shared/src/reglas/`**, como funciones puras con pruebas: venta (`prepararTicket`), folio, cancelación, correcciones al manifiesto, liquidación y resumen del día. Backend y tablet usan el mismo código. Lanzan `ErrorDeRegla` (`NO_ENCONTRADO`, `CONFLICTO`, `INVALIDO`) y el backend lo traduce a `AppError` (404/409/400) con `conReglas()`.
+- **Funciones "aplicar".** Cada escritura del backend es una función `aplicar…(tx, …)` que recibe la transacción, los ids y la hora. Las rutas REST y `/api/sync` usan las mismas funciones.
+- **Ids UUID.** Trailers, líneas de manifiesto, tickets y detalles usan UUID, que puede generar la tablet sin conexión. El **folio** del vale es un número aparte (`Ticket.folio`, único); los vales anteriores a v1.1.0 conservaron su número.
+- **URLs de la API.** La web usa rutas relativas `/api/...`: en desarrollo el proxy de Angular (`proxy.conf.json`) las manda a `http://localhost:3000`, y en producción Express sirve la web en el mismo origen (sin CORS, cookie *first-party*). El APK usa `environment.android.ts` (URL de Railway), `apiBaseUrlInterceptor` y `CapacitorHttp`, que maneja las cookies de forma nativa.
+- **Prisma 7**: la URL de conexión vive en `backend/prisma.config.ts` (no en `schema.prisma`), el cliente se genera en `backend/src/generated/prisma` (ignorado en git) y se conecta con el adaptador `@prisma/adapter-pg` (con `connectionTimeoutMillis` de 5 s).
 - **Express 5** manda solo al `errorHandler` los errores de funciones `async`, incluidos los `ZodError` de `.parse()`.
-- **Fechas**: el "día" se calcula en horario de la CDMX con `hoyCdmx()` (`frontend/src/app/core/fechas.ts`).
+- **Fechas**: el "día" se calcula en horario de la CDMX: `hoyCdmx()` en `frontend/src/app/core/fechas.ts` y `hoyCdmx()`/`rangoDelDia()` en `backend/src/lib/fechas.ts`.
+- **Arranque en frío**: el servicio de Railway duerme cuando no se usa. El middleware `esperarBaseDeDatos` espera a que la base responda antes de atender `/api` (ver [sección 6](#6-api-backend)).
 
 ---
 
@@ -83,21 +92,35 @@ Decisiones clave:
 Resumen de las piezas principales. Puede haber archivos auxiliares que no aparecen aquí.
 
 ```text
-abastos-ventas/
+abastos-venta/
 ├── package.json              # raíz: workspaces y scripts generales
+├── railway.json              # build, arranque, pre-deploy (migraciones) y healthcheck
+├── README.md                 # este documento
+├── CHANGELOG.md              # cambios por versión
+├── docs/
+│   └── BITACORA.md           # estado actual, decisiones y registro de trabajo
 ├── .gitignore                # node_modules, dist, .env, backend/src/generated, .angular
-├── .editorconfig
+├── .editorconfig / .prettierrc
 ├── shared/
 │   ├── package.json          # @abastos/shared
-│   └── src/
-│       ├── index.ts          # reexporta todo
-│       ├── dinero.ts         # importe (máx. 2 decimales) y cajas (entero positivo)
-│       ├── comun.ts          # utilidades comunes (ej. idParamSchema)
-│       ├── catalogos.ts      # catálogo de productos (Morrón, etc.)
-│       ├── trailer.ts        # esquemas y DTOs de trailers y cerrados
-│       ├── ticket.ts         # esquemas y DTOs de vales, formatearFolio
-│       ├── resumen.ts        # DTOs de resumen del día y liquidación
-│       └── auth.ts           # loginSchema, LoginInput, SesionUsuario
+│   ├── src/
+│   │   ├── index.ts          # reexporta todo
+│   │   ├── comun.ts          # idSchema (UUID), idParamSchema
+│   │   ├── dinero.ts         # importe, cajas y aritmética en centavos (Centavos, aCentavos, porcentajeDe…)
+│   │   ├── errores.ts        # ErrorDeRegla y esErrorDeRegla
+│   │   ├── catalogos.ts      # productos, colores, tamaños, formatearFolio, compararLineas
+│   │   ├── trailer.ts        # esquemas y DTOs de trailers y cerrados
+│   │   ├── ticket.ts         # esquemas y DTOs de vales
+│   │   ├── resumen.ts        # DTOs de resumen del día y liquidación
+│   │   ├── operaciones.ts    # las 8 operaciones que manda la tablet (Zod)
+│   │   ├── sync.ts           # lote de sincronización, resultados y snapshot
+│   │   ├── auth.ts           # loginSchema, LoginInput, SesionUsuario
+│   │   └── reglas/           # reglas de negocio puras
+│   │       ├── ventas.ts     # prepararTicket, siguienteFolio, validarCancelacion
+│   │       ├── manifiesto.ts # correcciones de líneas, cierre, valores por defecto
+│   │       ├── liquidacion.ts# calcularLiquidacion
+│   │       └── resumen.ts    # calcularResumenDia
+│   └── test/                 # pruebas con Vitest (npm test -w shared)
 ├── backend/
 │   ├── package.json
 │   ├── tsconfig.json         # incluye "noImplicitReturns": true
@@ -106,36 +129,47 @@ abastos-ventas/
 │   ├── prisma/
 │   │   ├── schema.prisma
 │   │   └── migrations/       # se versionan en git
-│   ├── requests/             # archivos .http para REST Client
-│   │   ├── trailers.http
-│   │   └── tickets.http
+│   ├── scripts/              # verificación contra la base local (ver sección 13)
+│   │   ├── foto-calculos.ts
+│   │   ├── probar-escrituras.ts
+│   │   └── probar-sync.ts
 │   └── src/
 │       ├── server.ts         # app.listen(PORT)
-│       ├── app.ts            # middlewares y registro de rutas
+│       ├── app.ts            # middlewares, rutas y archivos de la web
 │       ├── config/env.ts     # validación de variables de entorno con Zod
 │       ├── lib/
-│       │   ├── prisma.ts     # PrismaClient con adaptador pg
-│       │   └── dinero.ts     # helpers de Decimal
+│       │   ├── prisma.ts     # PrismaClient con adaptador pg y tipo Db
+│       │   ├── dinero.ts     # Decimal ↔ número/centavos
+│       │   ├── fechas.ts     # hoyCdmx, rangoDelDia
+│       │   ├── reglas.ts     # conReglas: ErrorDeRegla → AppError
+│       │   ├── bloqueos.ts   # bloquearLineas (FOR UPDATE)
+│       │   └── conexion.ts   # detección de errores de conexión y estado
 │       ├── middlewares/
-│       │   ├── error-handler.ts   # AppError + manejo de ZodError
-│       │   └── requiere-sesion.ts # protege /api
+│       │   ├── error-handler.ts        # AppError, Zod, 413, 503
+│       │   ├── requiere-sesion.ts      # protege /api
+│       │   └── esperar-base-de-datos.ts# arranque en frío
 │       ├── modules/
 │       │   ├── health/       # GET /api/health
 │       │   ├── auth/         # sesiones.ts, auth.routes.ts
 │       │   ├── trailers/     # trailers.service.ts, trailers.routes.ts
 │       │   ├── tickets/      # tickets.service.ts, tickets.routes.ts
-│       │   └── resumen/      # resumen.service.ts, resumen.routes.ts
+│       │   ├── resumen/      # resumen.service.ts, resumen.routes.ts
+│       │   └── sync/         # sync.service.ts, sync.routes.ts
+│       ├── requests/         # archivos .http para REST Client
 │       └── scripts/
 │           └── crear-usuario.ts
 └── frontend/
     ├── package.json
-    ├── angular.json          # serve usa proxy.conf.json
+    ├── angular.json          # configuraciones production, development y android
+    ├── capacitor.config.ts   # appId com.chiles.ventas, CapacitorHttp activado
+    ├── android/              # proyecto nativo de Android (Capacitor)
     ├── proxy.conf.json       # /api → http://localhost:3000
     ├── ngsw-config.json      # assetGroups + dataGroups (caché de /api/**)
     └── src/
         ├── index.html        # meta tags de iOS para la PWA
         ├── manifest.webmanifest
         ├── styles.scss       # variables (:root) y clases globales (.boton, .campo…)
+        ├── environments/     # environment.ts (web) y environment.android.ts (APK)
         └── app/
             ├── app.ts / app.html / app.scss   # shell: barra superior, estado PWA, nav inferior
             ├── app.config.ts
@@ -143,7 +177,8 @@ abastos-ventas/
             ├── core/
             │   ├── auth/      # auth.service, auth.guards, auth.interceptor
             │   ├── pwa/       # conexion, actualizaciones, precarga, sin-conexion.interceptor,
-            │   │              # barra-estado-pwa, datos-guardados, aviso-conexion-guardar
+            │   │              # barra-estado-pwa, datos-guardados, aviso-conexion-guardar, errores-red
+            │   ├── api-base-url.interceptor.ts  # antepone la URL de Railway en el APK
             │   ├── errores.ts # mensajeDeError, mensajeDeErrorAlGuardar
             │   ├── fechas.ts  # hoyCdmx, sumarDias
             │   ├── catalogos.ts      # colorDeChile, nombres para mostrar
@@ -180,14 +215,14 @@ Base PostgreSQL gestionada con Prisma. Las columnas en la base usan `snake_case`
 
 | Campo | Tipo | Notas |
 |---|---|---|
-| `id` | Int | autoincremental |
+| `id` | UUID | Lo genera la tablet (o el servidor, desde la web). |
 | `viaje` | String? | Nombre del viaje (ej. `HORTIFRESH-01`). Es opcional en la base solo por los trailers previos al campo; el formulario lo exige. |
 | `placa`, `numero`, `invernadero`, `chofer`, `anden` | String | |
 | `costoAnden` | Decimal(12,2) | "Piso" en el Excel |
 | `flete` | Decimal(12,2) | default 0 |
 | `descarga` | Decimal(12,2) | default 0 |
 | `comisionPorcentaje` | Decimal(5,2) | default 10 (10 = 10 %) |
-| `fechaLlegada` | DateTime | default now |
+| `fechaLlegada` | DateTime | Hora de llegada; si viene de la tablet, la hora en que se capturó. |
 | `fechaCierre` | DateTime? | se llena al cerrar y se borra al reabrir |
 | `estado` | EstadoTrailer | default `ACTIVO` |
 | `createdAt`, `updatedAt` | DateTime | |
@@ -196,32 +231,44 @@ Base PostgreSQL gestionada con Prisma. Las columnas en la base usan `snake_case`
 
 ### `ManifiestoDetalle` → tabla `manifiesto_detalle`
 
-Cada producto/tamaño que trae un trailer: `trailerId`, `producto`, `color?`, `tamano`, `cajas`. Las ventas apuntan aquí, así se sabe de qué trailer salió cada caja y cuántas quedan. Se borra en cascada con su trailer.
+Cada producto/tamaño que trae un trailer: `id` (UUID), `trailerId`, `producto`, `color?`, `tamano`, `cajas`. Las ventas apuntan aquí, así se sabe de qué trailer salió cada caja y cuántas quedan. Se borra en cascada con su trailer.
 
 ### `Ticket` (vale) → tabla `tickets`
 
-`id` (folio consecutivo), `fecha`, `clienteNombre`, `total` Decimal(12,2), `estado` (default `VIGENTE`), `createdAt`. Por ahora no hay tabla de clientes: el nombre se guarda como texto.
+`id` (UUID), `folio` (Int, **único**: el número impreso), `fecha`, `clienteNombre`, `total` Decimal(12,2), `estado` (default `VIGENTE`), `createdAt`. Por ahora no hay tabla de clientes: el nombre se guarda como texto.
 
 ### `TicketDetalle` → tabla `ticket_detalle`
 
-`ticketId`, `manifiestoDetalleId`, `cajas`, `precioCaja`, `subtotal`. La relación con el manifiesto es `Restrict`: no se puede borrar una línea del manifiesto que tenga ventas.
+`id` (UUID), `ticketId`, `manifiestoDetalleId`, `cajas`, `precioCaja`, `subtotal`. La relación con el manifiesto es `Restrict`: no se puede borrar una línea del manifiesto que tenga ventas.
+
+### Sincronización de la tablet
+
+| Modelo → tabla | Para qué |
+|---|---|
+| `OperacionSync` → `operaciones_sync` | Operaciones aplicadas: `id` (UUID de la operación), `seq` (orden, autoincremental), `tipo`, `datos` (JSON tal como llegó), `creadaEn` (hora en la tablet) y `aplicadaEn`. Su `id` hace que un reenvío no se aplique dos veces. |
+| `OperacionRechazada` → `operaciones_rechazadas` | Operaciones que el servidor rechazó, para revisarlas a distancia: `id`, `tipo`, `datos`, `creadaEn`, `motivo`, `intentos`, `primeraVez`, `ultimaVez`. Si luego se aplica, se borra de aquí. |
+| `EstadoSync` → `estado_sync` | Una sola fila (`id = 1`) con `ultimoContacto`: la última vez que la tablet llamó a `POST /api/sync`. |
 
 ### `Usuario` → tabla `usuarios`
 
-`id`, `usuario` (único, en minúsculas), `hashContrasena` (argon2), `creadoEn`.
+`id` (Int), `usuario` (único, en minúsculas), `hashContrasena` (argon2), `creadoEn`.
 
 ### `Sesion` → tabla `sesiones`
 
-`id`, `tokenHash` (único, SHA-256 del token), `usuarioId` (cascada), `expiraEn`, `creadoEn`.
+`id` (Int), `tokenHash` (único, SHA-256 del token), `usuarioId` (cascada), `expiraEn`, `creadoEn`.
 
-### Migraciones aplicadas (por nombre)
+### Migraciones aplicadas
 
-1. `inicial`: trailers, manifiesto, tickets y detalle.
-2. Gastos de la liquidación: `flete`, `descarga` y `comisionPorcentaje`.
-3. `viaje_y_cierre`: `viaje` y `fechaCierre`. Se creó con `--create-only` y se le agregó a mano un `UPDATE` para que los trailers ya cerrados tomaran `updated_at` como fecha de cierre.
-4. `autenticacion`: `usuarios` y `sesiones`.
+| Migración | Versión | Qué hace |
+|---|---|---|
+| `20261022221825_inicial` | 1.0.0 | Trailers, manifiesto, tickets y detalle. |
+| `20261023171842_gastos_trailer` | 1.0.0 | `flete`, `descarga` y `comisionPorcentaje`. |
+| `20261026233403_viaje_y_cierre` | 1.0.0 | `viaje` y `fechaCierre`. Con un `UPDATE` a mano para que los trailers ya cerrados tomaran `updated_at` como fecha de cierre. |
+| `20261028163624_autenticacion` | 1.0.0 | `usuarios` y `sesiones`. |
+| `20261104184003_ids_uuid` | 1.1.0 | Ids enteros → UUID, `folio` en tickets y `operaciones_sync`. **Escrita a mano** para conservar los datos; no se regenera con Prisma. |
+| `20261111222142_sync_rechazos_y_contacto` | 1.2.0 | `operaciones_rechazadas` y `estado_sync` (solo crea tablas). |
 
-> Verifica los nombres exactos en `backend/prisma/migrations/`. Las migraciones van en el repo; nunca se editan después de aplicadas.
+Las migraciones van en el repo y nunca se editan después de aplicadas. Como el tío ya captura ventas reales, toda migración debe conservar los datos (ver [sección 15](#15-despliegue-versiones-y-respaldos)).
 
 ---
 
@@ -229,19 +276,23 @@ Cada producto/tamaño que trae un trailer: `trailerId`, `producto`, `color?`, `t
 
 Todas las respuestas de error tienen la forma `{ mensaje, errores? }`:
 
-- `400`: datos inválidos (Zod), con el detalle por campo en `errores`.
+- `400`: datos inválidos (Zod), con el detalle por campo en `errores`; también un cuerpo que no es JSON válido.
 - `401`: sin sesión o sesión vencida.
-- `404` / `409`: errores de negocio lanzados con `AppError` (ej. no hay cajas suficientes → 409).
+- `404` / `409`: errores de negocio (`AppError` o `ErrorDeRegla` traducido), por ejemplo, no hay cajas suficientes → 409.
+- `413`: el cuerpo es demasiado grande (100 KB en general, 1 MB en `/api/sync`).
+- `503`: la base de datos no responde, normalmente porque el servicio acaba de despertar. Mensaje: "El servidor está despertando. Intenta de nuevo en unos segundos." y encabezado `Retry-After: 5`.
 - `500`: error interno (se registra en consola).
 
 ### Orden de middlewares en `app.ts`
 
 ```text
-trust proxy (1) → cors → express.json → cookieParser
+trust proxy (1) → cors → express.json (1 MB en /api/sync, 100 KB en lo demás) → cookieParser
+/api          → esperarBaseDeDatos   ← si no hubo contacto con la base en 60 s, SELECT 1 con reintentos (~20 s)
 /api/health   (público)
 /api/auth     (público, salvo /yo)
-/api          → requiereSesion   ← todo lo de abajo exige sesión
-/api/trailers, /api/tickets, /api/resumen
+/api          → requiereSesion       ← todo lo de abajo exige sesión
+/api/trailers, /api/tickets, /api/resumen, /api/sync
+archivos de la web + fallback de SPA (solo si existe el build)
 errorHandler
 ```
 
@@ -249,7 +300,7 @@ errorHandler
 
 | Método y ruta | Qué hace |
 |---|---|
-| `GET /api/health` | Hace `SELECT 1` y responde `{ estado: 'ok', baseDeDatos: 'conectada' }` |
+| `GET /api/health` | Hace `SELECT 1` y responde `{ estado: 'ok', baseDeDatos: 'conectada' }`. Railway lo usa como healthcheck. |
 
 ### Autenticación
 
@@ -278,9 +329,9 @@ errorHandler
 
 | Método y ruta | Qué hace |
 |---|---|
-| `POST /api/tickets` | Crea un vale: `{ clienteNombre, lineas: [{ manifiestoDetalleId, cajas, precioCaja }] }`. |
-| `GET /api/tickets?fecha=AAAA-MM-DD&estado=VIGENTE` | Vales de un día (por defecto hoy). `estado` es opcional. |
-| `GET /api/tickets/:id` | Un vale por su folio. |
+| `POST /api/tickets` | Crea un vale: `{ clienteNombre, lineas: [{ manifiestoDetalleId, cajas, precioCaja }] }`. El folio es el último + 1. |
+| `GET /api/tickets?fecha=AAAA-MM-DD&estado=VIGENTE` | Vales de un día (por defecto hoy), del folio más alto al más bajo. `estado` es opcional. |
+| `GET /api/tickets/:id` | Un vale por su id (UUID). |
 | `POST /api/tickets/:id/cancelar` | Marca el vale como cancelado. Sus cajas vuelven a quedar disponibles. |
 
 ### Resumen
@@ -290,21 +341,37 @@ errorHandler
 | `GET /api/resumen/dia?fecha=AAAA-MM-DD` | Vales, cajas vendidas, ventas, gastos de andén y ganancia del día, más lo vendido por trailer. Sin fecha usa hoy. |
 | `GET /api/resumen/trailers/:id` | Liquidación del trailer (equivalente a la hoja de Excel). |
 
+### Sincronización (tablet)
+
+| Método y ruta | Qué hace |
+|---|---|
+| `POST /api/sync` | Recibe `{ operaciones: [...] }` (máximo 100) y las aplica en orden. Responde `{ resultados, horaServidor }` con un resultado por operación: `APLICADA`, `YA_APLICADA` o `RECHAZADA` con su `motivo`. Un lote vacío solo registra el contacto. |
+| `GET /api/sync/snapshot` | Carga inicial de la tablet: `{ generadoEn, ultimoFolio, trailers, tickets }`, con los trailers activos y todos sus tickets (vigentes y cancelados). |
+
+Cada operación tiene `{ id (UUID), tipo, creadaEn (ISO con zona), datos }`. Los tipos son `trailer.crear`, `trailer.actualizar`, `trailer.cambiarEstado`, `linea.agregar`, `linea.actualizar`, `linea.eliminar`, `ticket.crear` y `ticket.cancelar`. Los esquemas están en `shared/src/operaciones.ts` y las reglas de aplicación, en la [sección 7](#7-reglas-de-negocio).
+
 ---
 
 ## 7. Reglas de negocio
 
+Las reglas viven en `shared/src/reglas/` como funciones puras con pruebas, y las usan el backend y, más adelante, la tablet. El backend agrega lo que depende de la base: bloqueos, existencia de registros e ids o folios repetidos.
+
 **Ventas**
 
-- Antes de guardar un vale se valida que cada línea del manifiesto exista, que su trailer no esté cerrado y que haya cajas suficientes. Si algo falla no se guarda nada y se responde con un mensaje claro, por ejemplo: "Solo quedan 90 cajas de Morrón Verde Grande (trailer T-46); se pidieron 95".
+- Antes de guardar un vale se valida que cada línea del manifiesto exista, que su trailer no esté cerrado y que haya cajas suficientes. Si algo falla no se guarda nada y se responde con un mensaje claro, por ejemplo: "Solo quedan 90 cajas de Morrón Verde MD (trailer T-46); se pidieron 95".
+- Si la misma línea viene dos veces en un vale, sus cajas se suman para revisar las existencias.
 - Para que dos ventas simultáneas no vendan las mismas cajas, la creación del vale corre en una transacción que **bloquea las filas** del manifiesto involucradas.
-- Subtotales y total se calculan en el servidor con `Decimal`.
-- Un vale mal hecho se corrige **cancelándolo y haciendo uno nuevo**. No se edita ni se borra, para no perder el rastro de los folios.
+- Subtotales y total se calculan en centavos enteros y se guardan como `Decimal` exacto.
+- **Folio**: desde la web, el siguiente consecutivo (el último + 1), calculado con un candado (`pg_advisory_xact_lock`) para que dos ventas no tomen el mismo número. Desde la tablet, el folio lo asigna la tablet; si ya lo tiene otro vale, la operación se rechaza.
+- Un vale mal hecho se corrige **cancelándolo y haciendo uno nuevo**. No se edita ni se borra, para no perder el rastro de los folios. Cancelar dos veces se rechaza.
 - Las cajas vendidas solo cuentan los vales `VIGENTE`. Al cancelar uno, las existencias se recuperan solas.
 
-**Trailers**
+**Trailers y manifiesto**
 
 - No se puede vender de un trailer cerrado.
+- Si al crear un trailer no se mandan flete, descarga o comisión, se usan 0, 0 y 10 %.
+- Una línea no puede quedar con menos cajas de las vendidas, y no se puede eliminar si tiene ventas (incluso canceladas). El color debe corresponder al producto según el catálogo.
+- Las correcciones al manifiesto y las cancelaciones bloquean la línea o el vale mientras se aplican.
 - Los trailers no se ocultan por fecha ni se borran solos, porque las liquidaciones históricas deben seguir disponibles. Por eso existe la pestaña de cerrados.
 
 **Resumen del día**
@@ -316,13 +383,23 @@ errorHandler
 
 **Liquidación por trailer**
 
-- Ventas por producto y tamaño: cajas que llegaron, vendidas y restantes, más la lista de ventas (folio, cliente, cajas, precio, total).
-- Gastos: flete + piso (`costoAnden`) + descarga + comisión (`comisionPorcentaje` % de la venta).
+- Ventas por producto y color (como cada bloque de la hoja) y por tamaño: cajas que llegaron, vendidas y restantes, más la lista de ventas (folio, cliente, cajas, precio, total).
+- Gastos: flete + piso (`costoAnden`) + descarga + comisión (`comisionPorcentaje` % de la venta, redondeada al centavo).
 - Balance = venta − gastos.
+
+**Sincronización de la tablet**
+
+- Cada operación se aplica en su propia transacción, de una en una (candado `pg_advisory_xact_lock(4243)`), en el orden en que llegó.
+- **Idempotencia**: si el `id` de la operación ya está en `operaciones_sync`, se responde `YA_APLICADA` sin repetirla.
+- **Hora**: las ventas, llegadas y cierres guardan la hora de la tablet (`creadaEn`), así cuentan para el día en que se hicieron aunque se sincronicen después.
+- **Rechazos**: un error de negocio o de datos (sin existencias, folio o id repetido, registro inexistente) rechaza esa operación, guarda el motivo en `operaciones_rechazadas` y **sigue con las demás**. Si la tablet reenvía una rechazada, se suma un intento.
+- **Errores inesperados** (conexión, fallas del código): no se rechazan, porque no son culpa de la operación. La petición falla y la tablet reintenta; lo ya aplicado vuelve como `YA_APLICADA`.
+- **Último contacto**: al terminar cada `POST /api/sync` (aunque venga vacío) se guarda en `estado_sync`.
 
 **Catálogo de productos**
 
-- Vive en `shared/src/catalogos.ts`. Hoy solo se vende Morrón (en colores como rojo, amarillo, naranja y verde), pero se pueden agregar variedades (ej. pasilla) **sin migración**, solo editando el catálogo.
+- Vive en `shared/src/catalogos.ts`. Hoy solo se vende Morrón (rojo, amarillo, naranja y verde), pero se pueden agregar variedades (ej. pasilla) **sin migración**, solo editando el catálogo.
+- Tamaños, en el orden de la hoja: XXL, XL, LG, MD, SM, CH. Las líneas se ordenan por producto, color (según el catálogo) y tamaño con `compararLineas`.
 
 ---
 
@@ -393,9 +470,9 @@ Pide usuario y contraseña (mínimo 10 caracteres, sin mostrarla en pantalla) y 
 
 ---
 
-## 10. Funcionamiento sin conexión (PWA)
+## 10. Funcionamiento sin conexión
 
-Se definieron tres niveles y se implementaron los dos primeros. El nivel 3 (vender sin red y sincronizar después) **no** está hecho.
+Hay tres niveles. Los niveles 1 y 2 están terminados para la web. El nivel 3 (capturar sin red y sincronizar después) es para la tablet y está en desarrollo: el backend ya está listo (v1.2.0).
 
 ### Nivel 1: la app abre sin red
 
@@ -418,29 +495,52 @@ Se definieron tres niveles y se implementaron los dos primeros. El nivel 3 (vend
   - `mensajeDeErrorAlGuardar()` distingue "no se envió nada" de "se cortó a la mitad; revisa si quedó registrado antes de reintentar", para evitar vales duplicados.
 - Al cerrar sesión se borran también los cachés de datos del service worker.
 
-> Nota a revisar: en el código de login, `auth.service.ts`, `login-page.ts` y `ajustes-page.ts` importan `esErrorDeConexion` de `core/pwa/errores-red`, mientras que el resto de la lógica de errores quedó en `core/errores.ts`. Confirma cuál de los dos archivos existe en tu repo y deja uno solo como fuente.
+> Nota a revisar: `auth.service.ts`, `login-page.ts` y `ajustes-page.ts` importan `esErrorDeConexion` de `core/pwa/errores-red.ts`, mientras que el resto de la lógica de errores quedó en `core/errores.ts`. Conviene dejar uno solo como fuente.
 
-**Limitaciones conocidas**: solo está disponible offline lo que ya se consultó con red; la búsqueda de cerrados funciona sin red solo para combinaciones ya consultadas; guardar siempre requiere conexión.
+**Limitaciones de la web**: solo está disponible offline lo que ya se consultó con red; la búsqueda de cerrados funciona sin red solo para combinaciones ya consultadas; guardar siempre requiere conexión.
+
+### APK de Android (Capacitor)
+
+- Mismo código de Angular, compilado con la configuración `android` de `angular.json`: usa `environment.android.ts` (URL de Railway) y **sin service worker**.
+- `apiBaseUrlInterceptor` antepone la URL del backend a las rutas `/api/...`.
+- `CapacitorHttp` activado en `capacitor.config.ts`: las peticiones salen por la capa nativa y la cookie de sesión funciona contra Railway.
+- Cómo generarlo: ver [sección 11.10](#1110-generar-el-apk-de-android).
+
+### Nivel 3: la tablet captura sin red (en desarrollo)
+
+Diseño acordado:
+
+- Cada acción en la tablet se guarda como **operación** (UUID, tipo, datos y hora), se aplica en una base local (SQLite) y entra a una cola. Al haber señal, la cola se manda en orden a `POST /api/sync`, en lotes de hasta 100.
+- El servidor aplica cada operación con las mismas reglas de `shared` y registra su UUID: un reenvío nunca duplica nada.
+- La tablet genera todos los ids y **asigna el folio**. Es el único dispositivo que captura; la web queda solo de lectura.
+- Las operaciones rechazadas se marcan en la tablet con su motivo (no se descartan) y también quedan en el servidor para revisarlas a distancia.
+- La web muestra "Última sincronización de la tablet: hace X".
+- Para instalar o reinstalar la tablet se usa `GET /api/sync/snapshot`.
+- La tablet compara su reloj con el header `Date` del servidor para avisar si está desfasado.
+- Si la sesión de 30 días vence sin señal, la tablet pide login y conserva la cola.
+
+Avance por pasos: [sección 16](#16-pendientes-y-siguientes-pasos) y [docs/BITACORA.md](docs/BITACORA.md).
 
 ---
 
 ## 11. Cómo clonar y levantar el proyecto
 
-Todos los comandos se corren desde la **raíz del monorepo** (`abastos-ventas/`) salvo que se diga otra cosa.
+Todos los comandos se corren desde la **raíz del monorepo** (`abastos-venta/`) salvo que se diga otra cosa.
 
 ### 11.1 Requisitos
 
 - **Node.js 24.15 o superior** (con npm). En Windows se recomienda instalarlo con `nvm-windows`.
-- **PostgreSQL** local (o una base remota: Neon, Supabase, Railway…).
+- **PostgreSQL** local, administrado con pgAdmin 4 (no se usa Docker).
 - **Git**.
+- Para el APK: **Android Studio** (incluye el SDK de Android y el JDK).
 - Opcional: **VS Code** con la extensión **REST Client** para los archivos `.http`.
 - No hace falta tener `ng` instalado globalmente: se usa la CLI local con `npm run ng -w frontend -- …`.
 
 ### 11.2 Clonar e instalar dependencias
 
 ```bash
-git clone <URL-DEL-REPOSITORIO>
-cd abastos-ventas
+git clone https://github.com/ELopezSingh/abastos-venta.git
+cd abastos-venta
 npm install
 ```
 
@@ -448,11 +548,10 @@ npm install
 
 ### 11.3 Crear la base de datos local
 
-Con PostgreSQL corriendo, crea una base vacía (ejemplo con el cliente `psql`; usa tu propio usuario de Postgres):
+Hay dos opciones:
 
-```bash
-psql -U <usuario_postgres> -c "CREATE DATABASE abastos;"
-```
+- **Base vacía**: en pgAdmin, clic derecho en *Databases* → *Create* → *Database…* (por ejemplo, `abastos`).
+- **Copia de producción** (recomendada para probar cambios con datos reales): crea una base nueva y restaura en ella un respaldo con clic derecho → *Restore…*. Cómo sacar el respaldo: [sección 15.4](#154-respaldo-de-la-base-de-producción).
 
 ### 11.4 Variables de entorno
 
@@ -481,14 +580,18 @@ npm run db:deploy -w backend     # aplica las migraciones que ya vienen en el re
 npm run db:generate -w backend   # regenera el cliente de Prisma
 ```
 
-> En Prisma 7, `migrate` ya **no** regenera el cliente solo. Después de cualquier migración corre siempre `npm run db:generate -w backend`.
+> En Prisma 7, `migrate deploy` **no** regenera el cliente. Después de aplicar migraciones corre siempre `npm run db:generate -w backend`.
 
-Si vas a **cambiar el schema** (no solo clonar), usa `db:migrate`, que crea una migración nueva:
+Si vas a **cambiar el schema**, crea la migración sin aplicarla, revisa el SQL y luego aplícala:
 
 ```bash
-npm run db:migrate -w backend -- --name <nombre_del_cambio>
-npm run db:generate -w backend
+cd backend
+npx prisma migrate dev --create-only --name <nombre_del_cambio>
+# revisar prisma/migrations/<fecha>_<nombre>/migration.sql
+npx prisma migrate dev
 ```
+
+Si la migración toca tablas con datos, se escribe o ajusta a mano para conservarlos, y se prueba primero en una copia restaurada de producción.
 
 ### 11.6 Crear el usuario para entrar
 
@@ -506,7 +609,8 @@ Esto compila `shared` y levanta en paralelo (con `concurrently`) la API en `http
 
 Abre `http://localhost:4200`: debe aparecer el login.
 
-> Si cambias algo en `shared/`, recompílalo con `npm run build:shared`, o deja corriendo `npm run watch -w @abastos/shared`.
+> Si cambias algo en `shared/`, recompílalo con `npm run build:shared`, o deja corriendo `npm run watch -w @abastos/shared`. Si el frontend no toma el cambio, borra `frontend/.angular/cache`.
+> `npm run dev` **no revisa los tipos** del backend. Antes de hacer commit corre `npm run build -w backend`.
 > En desarrollo el service worker está **desactivado**. Para probar la PWA y el modo sin conexión usa el build de producción (abajo).
 
 ### 11.8 Probar el build de producción y la PWA en local
@@ -539,10 +643,22 @@ Cada cambio del frontend requiere detener `http-server` (`Ctrl + C`), repetir el
 ### 11.9 Verificaciones rápidas
 
 ```bash
-npm run typecheck                    # tipos de shared y backend
+npm test -w shared                   # pruebas de las reglas de negocio
+npm run build -w backend             # tipos del backend (prisma generate + tsc)
+npm run typecheck                    # compila shared y revisa tipos del backend
 npm run test -w frontend             # pruebas de Angular (si aplica)
 npm run db:studio -w backend         # ver los datos en Prisma Studio
 ```
+
+### 11.10 Generar el APK de Android
+
+```bash
+npm run build:shared
+npm run build:android -w frontend    # build con la configuración android + npx cap sync android
+npm run android -w frontend          # abre el proyecto en Android Studio
+```
+
+En Android Studio, genera el APK desde *Build* → *Build App Bundle(s) / APK(s)* → *Build APK(s)* e instálalo en el dispositivo. El APK apunta a la URL de producción definida en `frontend/src/environments/environment.android.ts`.
 
 ---
 
@@ -555,9 +671,17 @@ npm run db:studio -w backend         # ver los datos en Prisma Studio
 | `npm run dev` | Compila `shared` y levanta API + frontend. |
 | `npm run dev:api` | Solo la API. |
 | `npm run dev:web` | Solo Angular. |
-| `npm run build` | Compila `shared`, `backend` y `frontend`. |
+| `npm run build` | Compila `shared`, `backend` y `frontend` (es el build de Railway). |
 | `npm run build:shared` | Compila `@abastos/shared`. |
 | `npm run typecheck` | Compila `shared` y revisa tipos del backend. |
+
+### Shared (`-w @abastos/shared` o `-w shared`)
+
+| Comando | Qué hace |
+|---|---|
+| `build` | `tsc` |
+| `watch` | `tsc --watch` |
+| `test` | `vitest run` (pruebas de `shared/test`) |
 
 ### Backend (`-w backend`)
 
@@ -569,10 +693,18 @@ npm run db:studio -w backend         # ver los datos en Prisma Studio
 | `typecheck` | `tsc --noEmit` |
 | `db:generate` | `prisma generate` |
 | `db:migrate` | `prisma migrate dev` (crea y aplica migraciones) |
-| `db:deploy` | `prisma migrate deploy` (solo aplica, para clonar o producción) |
+| `db:deploy` | `prisma migrate deploy` (solo aplica; es el pre-deploy de Railway) |
 | `db:studio` | `prisma studio` |
 | `usuario:crear` | Crea el usuario o cambia su contraseña |
 | `postinstall` | `prisma generate` |
+
+Scripts de verificación (desde `backend/`, contra la base **local**):
+
+| Comando | Qué hace |
+|---|---|
+| `npx tsx scripts/foto-calculos.ts <archivo.json>` | Guarda en JSON resúmenes, vales, liquidaciones y trailers para comparar dos versiones del código. |
+| `npx tsx scripts/probar-escrituras.ts` | Prueba todas las funciones `aplicar…` y **revierte** todo al final. |
+| `npx tsx scripts/probar-sync.ts` | Prueba `/api/sync` y el snapshot, y **borra** sus datos de prueba al final. |
 
 ### Frontend (`-w frontend`)
 
@@ -580,22 +712,53 @@ npm run db:studio -w backend         # ver los datos en Prisma Studio
 |---|---|
 | `start` | `ng serve` con `proxy.conf.json` |
 | `build` | Build de producción en `frontend/dist/frontend/browser` |
+| `watch` | Build de desarrollo en modo watch |
+| `test` | `ng test` |
+| `build:android` | Build con la configuración `android` y `npx cap sync android` |
+| `android` | Abre el proyecto nativo en Android Studio |
 | `ng -- <args>` | CLI de Angular local (ej. `npm run ng -w frontend -- g c nombre`) |
-
-### Shared (`-w @abastos/shared`)
-
-| Comando | Qué hace |
-|---|---|
-| `build` | `tsc` |
-| `watch` | `tsc --watch` |
 
 ---
 
-## 13. Pruebas manuales
+## 13. Pruebas
+
+### Pruebas automáticas (shared)
+
+```bash
+npm test -w shared
+```
+
+Cubren la aritmética en centavos (incluido el redondeo de la comisión), la venta (`prepararTicket`), el folio, la cancelación, las correcciones al manifiesto, la liquidación, el resumen del día y los esquemas de las operaciones de sincronización. Si cambias una regla de negocio, agrega o ajusta su prueba.
+
+### Scripts de verificación del backend
+
+Se corren desde `backend/` contra la base **local** (de preferencia una copia restaurada de producción). Nunca contra producción.
+
+- **`probar-escrituras.ts`**: corre en una transacción todas las escrituras (alta de trailer, ventas, folio repetido, correcciones, cancelación y cierre), con ids y horas como los pondría la tablet, y al final revierte todo. Debe terminar con "Todo bien".
+- **`probar-sync.ts`**: manda lotes a `sincronizar()` (aplicadas, reenviadas, rechazadas, mal formadas, lote vacío, más de 100) y revisa el snapshot. Al final borra sus datos y restaura el último contacto.
+- **`foto-calculos.ts`**: para refactors que no deben cambiar nada visible. Toma una foto antes y otra después, y compáralas:
+
+  ```powershell
+  # Foto "antes", con el código sin los cambios (desde la raíz del repo)
+  git stash push --include-untracked -m "cambios"
+  npm run build:shared
+  cd backend
+  npx tsx scripts/foto-calculos.ts $env:TEMP\foto-antes.json
+  cd ..
+  git stash pop
+  npm run build:shared
+
+  # Foto "después" y comparación
+  cd backend
+  npx tsx scripts/foto-calculos.ts $env:TEMP\foto-despues.json
+  git diff --no-index $env:TEMP\foto-antes.json $env:TEMP\foto-despues.json
+  ```
+
+  Si el último comando no imprime nada, no cambió ninguna lectura. Las fotos traen datos reales de clientes: bórralas al terminar y nunca las subas al repo.
 
 ### Archivos `.http` (REST Client)
 
-En `backend/requests/` están `trailers.http` y `tickets.http` con un ejemplo por endpoint. Como la API exige sesión, **agrega al inicio de cada archivo** una petición de login; REST Client guarda la cookie y la manda en las siguientes:
+En `backend/src/requests/` están `trailers.http`, `tickets.http` y `resumen.http`, con un ejemplo por endpoint. Como la API exige sesión, **agrega al inicio de cada archivo** una petición de login; REST Client guarda la cookie y la manda en las siguientes:
 
 ```http
 @api = http://localhost:3000/api
@@ -609,18 +772,22 @@ Content-Type: application/json
 
 No guardes una contraseña real en estos archivos dentro del repo: reemplázala por el placeholder antes de hacer commit.
 
-### Casos que conviene repetir antes de cada entrega
+### Casos manuales que conviene repetir antes de cada entrega
 
-1. Crear un trailer, venderle, revisar que suban las cajas vendidas, cancelar el vale y revisar que regresen.
-2. Intentar vender más cajas de las que hay → 409 con mensaje claro.
-3. Vender de un trailer cerrado → rechazado.
-4. Resumen del día igual al total de Vales.
-5. Liquidación: comisión = % de la venta; balance = venta − gastos; imprimir sin menú.
-6. Cerrados: buscar por viaje/invernadero/placa, "Ver más", reabrir.
-7. Login: entrar; contraseña incorrecta 11 veces → "Demasiados intentos".
-8. Sin conexión (build de producción): con sesión → datos en caché con "Mostrando datos de las…"; botones de guardar con aviso; después de salir con red → se queda en login.
-9. Cambio de contraseña con `usuario:crear` → la siguiente acción regresa al login.
-10. Vista de teléfono angosto (iPhone SE) en DevTools.
+1. Crear un trailer sin flete ni comisión (quedan 0 y 10 %), venderle, revisar que suban las cajas vendidas, cancelar el vale y revisar que regresen.
+2. Vender 3 cajas a $33.33 → total exacto de $99.99 y folio = último + 1.
+3. Intentar vender más cajas de las que hay → 409 con mensaje claro.
+4. Vender de un trailer cerrado → rechazado.
+5. Corregir el manifiesto: editar, agregar y eliminar una línea; bajar cajas de lo vendido y eliminar una línea con ventas → rechazados.
+6. Resumen del día igual al total de Vales.
+7. Liquidación: comisión = % de la venta; balance = venta − gastos; imprimir sin menú.
+8. Cerrados: buscar por viaje/invernadero/placa, "Ver más", reabrir.
+9. Login: entrar; contraseña incorrecta 11 veces → "Demasiados intentos".
+10. Sin conexión (build de producción): con sesión → datos en caché con "Mostrando datos de las…"; botones de guardar con aviso; después de salir con red → se queda en login.
+11. Cambio de contraseña con `usuario:crear` → la siguiente acción regresa al login.
+12. Arranque en frío: detener PostgreSQL (`Stop-Service` en PowerShell como administrador) y navegar → "El servidor está despertando…", no "Error interno". Al arrancarlo, todo vuelve a funcionar.
+13. Sincronización desde la consola del navegador (con sesión): mandar un `trailer.crear` y un `ticket.crear` con `creadaEn` de ayer a `POST /api/sync` → aparecen en la app con la fecha de ayer; una venta sin existencias → `RECHAZADA` y queda en `operaciones_rechazadas`.
+14. Vista de teléfono angosto (iPhone SE) en DevTools, y el APK en el dispositivo Android.
 
 ---
 
@@ -628,36 +795,122 @@ No guardes una contraseña real en estos archivos dentro del repo: reemplázala 
 
 | Síntoma | Causa | Solución |
 |---|---|---|
-| Después de `migrate` el código no ve los modelos nuevos | Prisma 7 no regenera el cliente al migrar | `npm run db:generate -w backend` |
+| Después de migrar, el código no ve los modelos nuevos | Prisma 7 no regenera el cliente al migrar | `npm run db:generate -w backend` |
+| Un cambio en `shared` no se refleja | `shared` se consume compilado (`dist`) | `npm run build:shared`; si el frontend sigue igual, borrar `frontend/.angular/cache` |
+| El backend compila en `npm run dev` pero falla en Railway | `tsx` no revisa tipos | Correr `npm run build -w backend` antes de cada commit |
+| Primera petición tras un rato sin uso fallaba con ETIMEDOUT o 500 | El servicio de Railway duerme y la base tarda en responder al despertar | Resuelto en v1.2.0: el backend espera hasta ~20 s y, si no, responde 503 con mensaje claro |
 | Login correcto pero regresa al login | `validarSesion` sin `return` en el caso normal (ya corregido) | Mantener `"noImplicitReturns": true` en `backend/tsconfig.json` y correr `npm run typecheck` |
 | La cookie no se guarda en local | `NODE_ENV=production` en el `.env` local, o llamadas a `http://localhost:3000` en vez de `/api` | Quitar `NODE_ENV` del `.env` local y usar siempre rutas relativas |
 | Entra sin login en `:8080` | La cookie de `:4200` vale para cualquier puerto de localhost | Salir en un puerto antes de probar el otro |
 | `:8080` muestra una versión vieja | No se rehízo el build, o el service worker tenía la versión anterior | Rehacer build, Clear site data en la raíz y recargar |
-| "Cannot GET /…" al recargar en `http-server` | `http-server` no tiene *fallback* de SPA | Abrir la raíz `http://localhost:8080/`. En producción Express responderá `index.html` |
+| "Cannot GET /…" al recargar en `http-server` | `http-server` no tiene *fallback* de SPA | Abrir la raíz `http://localhost:8080/`. En producción Express responde `index.html` |
 | El proxy de `http-server` manda mal las peticiones | Un `?` al final de la URL del proxy | Usar `--proxy http://localhost:3000` sin `?` |
 | Fallos de conexión con `localhost` en Windows | Resolución `localhost` (IPv6) vs `127.0.0.1` | Usar `127.0.0.1` en el destino del proxy si ocurre |
 | Ojo de "ver contraseña" aparece y desaparece | Es el de Edge, no el de la app | Ya se ocultó con `::-ms-reveal` y hay botón propio |
+| Al editar un archivo por partes desaparece una función | Se reemplazó un bloque más grande del necesario | Revisar `git diff <archivo>` después de editar y antes del commit |
 
 ---
 
-## 15. Pendientes y siguientes pasos
+## 15. Despliegue, versiones y respaldos
 
-### Deploy (siguiente paso)
+### 15.1 Producción en Railway
 
-Plataforma elegida: **todo en Railway** (servicio Node + PostgreSQL de Railway).
+- Un servicio de Node que despliega la rama **`main`** y una base PostgreSQL de Railway. La configuración está en `railway.json`:
+  - Build: `npm run build` (shared + backend + frontend).
+  - Pre-deploy: `npm run db:deploy -w backend` (aplica migraciones). Si falla, Railway **no** cambia la versión activa.
+  - Arranque: `npm run start -w backend`. Express sirve la API y el build de Angular, con *fallback* de SPA y sin caché en `index.html`, `ngsw-worker.js`, `ngsw.json` y el manifest.
+  - Healthcheck: `/api/health`.
+- Variables en Railway: `DATABASE_URL` (referencia a la base de Railway) y `NODE_ENV=production`. `PORT` lo asigna Railway.
+- El servicio **duerme** cuando no se usa. La primera petición al despertar tarda más; el backend espera a la base (ver [sección 6](#6-api-backend)).
+- URL de producción: `https://abastos-venta-production.up.railway.app`, que es la que usa el APK.
 
-- [ ] Hacer que Express sirva `frontend/dist/frontend/browser` y responda `index.html` para cualquier ruta que no sea `/api` (*fallback* de SPA).
-- [ ] Evitar caché agresiva de `index.html`, `ngsw-worker.js` y `ngsw.json`.
-- [ ] Configurar en Railway el build del monorepo (`npm install` + `npm run build`) y el arranque (`npm run start -w backend`).
-- [ ] Variables en Railway: `DATABASE_URL` (referencia a la base de Railway), `NODE_ENV=production`. `PORT` lo asigna Railway.
-- [ ] Aplicar migraciones en producción con `npm run db:deploy -w backend`.
-- [ ] Crear el usuario contra la base de producción con `npm run usuario:crear -w backend`.
-- [ ] Probar en el iPhone y el iPad reales: instalación desde Safari, login, modo sin conexión y actualizaciones.
+### 15.2 Ramas y versiones
+
+- `main`: producción. Solo recibe merges desde `develop`.
+- `develop`: integración.
+- `feature/<nombre>`: cada cambio, creada desde `develop`.
+- Versiones con [SemVer](https://semver.org/lang/es/) y tags anotados `vX.Y.Z` sobre `main`. Cada versión se documenta en [CHANGELOG.md](CHANGELOG.md).
+
+### 15.3 Cómo publicar una versión
+
+**Antes**
+
+1. En la rama `feature/…`: builds, `npm test -w shared`, `probar-escrituras` y `probar-sync` (y la foto antes/después si es un refactor).
+2. Merge a `develop` y repetir los builds:
+   ```bash
+   git checkout develop
+   git pull origin develop
+   git merge --no-ff feature/<nombre> -m "Merge feature/<nombre>: <resumen>"
+   npm run build -w shared
+   npm test -w shared
+   npm run build -w backend
+   git push origin develop
+   ```
+3. Si hay migración: sacar un **respaldo nuevo** de producción, restaurarlo como copia local y correr ahí `npx prisma migrate deploy` (es lo que hará Railway).
+4. Tomar capturas en producción del resumen del día y de 2 o 3 liquidaciones, para comparar después.
+5. Elegir un horario en que el tío no esté vendiendo y avisarle.
+
+**Despliegue**
+
+6. Revisar que `main` no tenga commits que no estén en `develop` (`git log develop..main --oneline` debe salir vacío) y mezclar:
+   ```bash
+   git checkout main
+   git pull origin main
+   git merge --no-ff develop -m "Release vX.Y.Z: <resumen>"
+   git push origin main
+   ```
+7. En Railway, revisar el log del pre-deploy y que el despliegue quede como **Active**.
+
+**Después (solo lectura: no se venden vales de prueba en producción, porque un folio usado no se recupera)**
+
+8. Comparar resumen y liquidaciones con las capturas, en la web y en el APK.
+9. Revisar `/api/health` y, con sesión, `/api/sync/snapshot`.
+10. Dejar que el servicio se duerma y abrir la app: no debe salir ningún error.
+11. Crear el tag **después** de confirmar que todo funciona, y actualizar el CHANGELOG y la bitácora:
+    ```bash
+    git tag -a vX.Y.Z -m "vX.Y.Z: <resumen>"
+    git push origin vX.Y.Z
+    ```
+
+**Si algo falla**
+
+- La migración falla en el pre-deploy → la versión anterior sigue activa. Revisar el log antes de reintentar; Prisma marca la migración como fallida y hay que resolverla con `prisma migrate resolve`.
+- La app nueva se comporta mal → en Railway, *Deployments* → despliegue anterior → **Rollback**. Las tablas nuevas pueden quedarse, porque el código anterior no las usa. Después se corrige en git.
+- Último recurso, solo si se dañaran datos: restaurar el respaldo (se pierde lo vendido después de sacarlo).
+
+No se cambia la rama de producción a `develop` para "probar": es el mismo servicio y la misma base, así que el riesgo es igual. Para probar en Railway antes de producción, lo correcto es un ambiente de **staging** con su propia base.
+
+### 15.4 Respaldo de la base de producción
+
+1. En Railway, servicio de Postgres → **Variables** → `DATABASE_PUBLIC_URL`: de ahí salen host (`…proxy.rlwy.net`), puerto, usuario, contraseña y base. Se escriben directo en pgAdmin; no se pegan en chats ni archivos del repo.
+2. En pgAdmin, registrar el servidor con un nombre inconfundible (ej. `Abastos PRODUCCIÓN`).
+3. Clic derecho en la base → **Backup…** → Format **Custom**, Encoding **UTF8**, nombre con fecha y hora (ej. `abastos-prod-2026-11-12-1830.backup`), guardado **fuera** del repo.
+4. Confirmar "Successfully completed" y que el archivo pese más de 0 KB. Si sale "server version mismatch", en *File → Preferences → Paths → Binary paths* apuntar a un PostgreSQL igual o más nuevo que el de Railway.
+5. Probar el respaldo restaurándolo en una base local y revisando el último folio.
+
+Se puede sacar aunque el tío esté vendiendo: `pg_dump` toma una foto consistente. El archivo trae nombres de clientes y ventas: guardarlo en un lugar seguro y nunca subirlo a git.
+
+### 15.5 Datos sensibles
+
+Contraseñas, tokens, cadenas de conexión con credenciales y la contraseña del usuario de la app nunca se escriben en el código, en este documento, en la bitácora, en commits ni en chats. Se guardan en un gestor de contraseñas y en las variables de Railway.
+
+---
+
+## 16. Pendientes y siguientes pasos
+
+### Plan: la tablet captura sin conexión
+
+- [x] **Paso 1** — Reglas de negocio en `@abastos/shared` (v1.2.0).
+- [x] **Paso 2** — Backend: `POST /api/sync`, `GET /api/sync/snapshot` y tolerancia al arranque en frío (v1.2.0).
+- [ ] **Paso 3** — Web en modo solo lectura (sin crear, vender, cerrar ni cancelar), "Última sincronización de la tablet: hace X", vista de operaciones rechazadas y reintento en el frontend ante 503.
+- [ ] **Paso 4** — Tablet: SQLite (`@capacitor-community/sqlite`), cola de operaciones, sincronización al recuperar señal, registro de rechazadas, carga inicial con el snapshot y aviso de reloj desfasado.
+
+Antes del paso 4 conviene tener un ambiente de **staging** en Railway, porque ese paso es el más delicado.
 
 ### Más adelante
 
-- [ ] **Impresión de vales** (3 copias: cliente, vendedor y quien descarga). Opción recomendada: impresora térmica Star Micronics de 80 mm (SM-L300 o SM-T300i) con la app gratuita PassPRNT, porque Safari no soporta Web Bluetooth. Ajustes es el lugar previsto para configurarla.
+- [ ] **Impresión de vales** (3 copias: cliente, vendedor y quien descarga). Impresora térmica por definir. La recomendación anterior (Star Micronics con PassPRNT) era para iOS; hay que revisarla para Android. Ajustes es el lugar previsto para configurarla.
 - [ ] **Cuentas por cobrar / crédito a clientes** (el tío lleva una libreta aparte).
 - [ ] Confirmar con el tío la definición de **ganancia neta** (hoy: ventas − costos de andén).
-- [ ] Nivel 3 sin conexión (vender sin red con bandeja de salida en IndexedDB), solo si hace falta.
 - [ ] Unificar `core/errores.ts` y `core/pwa/errores-red.ts` (ver nota en la sección 10).
+- [ ] Revisar si sigue en pie mover producción a la cuenta definitiva de Railway.
