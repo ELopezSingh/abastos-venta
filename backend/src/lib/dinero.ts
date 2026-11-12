@@ -6,5 +6,11 @@ export const aDecimal = (valor: number) => valor.toFixed(2);
 /** Decimal de la base → number para el JSON de respuesta. */
 export const aNumero = (valor: Prisma.Decimal) => valor.toNumber();
 
-/** Crea un Decimal exacto a partir de un number con máximo 2 decimales. */
-export const decimal = (valor: number) => new Prisma.Decimal(aDecimal(valor));
+/** Decimal de la base → centavos enteros, para las reglas de @abastos/shared. */
+export function centavosDe(valor: Prisma.Decimal): number {
+  const centavos = valor.mul(100);
+  if (!centavos.isInteger()) {
+    throw new Error(`Importe con más de 2 decimales: ${valor.toString()}`);
+  }
+  return centavos.toNumber();
+}

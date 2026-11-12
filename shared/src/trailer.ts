@@ -9,20 +9,23 @@ export type EstadoTrailer = z.infer<typeof estadoTrailerSchema>;
 
 // ---------- Entradas ----------
 
-const manifiestoLineaBase = z.object({
+export const manifiestoLineaBase = z.object({
   producto: z.enum(NOMBRES_PRODUCTOS, "Elige un producto de la lista"),
   color: z.string().trim().optional(),
   tamano: z.enum(TAMANOS, "Elige un tamaño"),
   cajas,
 });
 
-export const manifiestoLineaSchema = manifiestoLineaBase.superRefine(
-  (linea, ctx) => {
-    const error = errorDeColor(linea.producto, linea.color);
-    if (error)
-      ctx.addIssue({ code: "custom", path: ["color"], message: error });
-  },
-);
+/** Revisa que el color corresponda al producto (para usar con .superRefine). */
+export function revisarColor(
+  linea: { producto: string; color?: string | undefined },
+  ctx: z.RefinementCtx,
+): void {
+  const error = errorDeColor(linea.producto, linea.color);
+  if (error) ctx.addIssue({ code: "custom", path: ["color"], message: error });
+}
+
+export const manifiestoLineaSchema = manifiestoLineaBase.superRefine(revisarColor);
 
 export const crearTrailerSchema = z.object({
   viaje: texto("El nombre del viaje es obligatorio"),

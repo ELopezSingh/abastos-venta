@@ -134,3 +134,29 @@ model Sesion {
   @@index([usuarioId])
   @@map("sesiones")
 }
+
+/// Operaciones de la tablet que el servidor rechazó, para revisarlas a distancia.
+/// El id es el UUID de la operación; si la tablet la reenvía, se actualiza.
+model OperacionRechazada {
+  id         String   @id @db.Uuid
+  tipo       String
+  datos      Json
+  /// Hora en que se hizo la acción en la tablet.
+  creadaEn   DateTime @map("creada_en")
+  motivo     String
+  intentos   Int      @default(1)
+  primeraVez DateTime @default(now()) @map("primera_vez")
+  ultimaVez  DateTime @default(now()) @map("ultima_vez")
+
+  @@index([ultimaVez])
+  @@map("operaciones_rechazadas")
+}
+
+/// Estado de la sincronización. Una sola fila (id = 1).
+model EstadoSync {
+  id             Int      @id @default(1)
+  /// Último POST /api/sync de la tablet, aunque no trajera operaciones.
+  ultimoContacto DateTime @map("ultimo_contacto")
+
+  @@map("estado_sync")
+}
