@@ -51,3 +51,39 @@ export interface SnapshotDto {
   /** Todos los tickets (vigentes y cancelados) con alguna línea de un trailer activo. */
   tickets: TicketDto[];
 }
+
+// ---------- Consulta desde la web ----------
+
+/** Estado de la sincronización (GET /api/sync/estado). */
+export interface EstadoSyncDto {
+  /** Último POST /api/sync de la tablet (ISO), aunque no trajera operaciones. null si nunca ha sincronizado. */
+  ultimoContacto: string | null;
+  /** Operaciones rechazadas pendientes de revisar. */
+  rechazadas: number;
+}
+
+/** Máximo de rechazos que devuelve GET /api/sync/rechazadas (los más recientes). */
+export const MAX_RECHAZADAS_LISTA = 100;
+
+/** Una operación que el servidor rechazó, tal como la mandó la tablet. */
+export interface OperacionRechazadaDto {
+  id: string;
+  tipo: string;
+  /** Los datos de la operación tal como llegaron (sin validar si el rechazo fue por datos inválidos). */
+  datos: unknown;
+  /** Hora en que se hizo la acción en la tablet. */
+  creadaEn: string;
+  motivo: string;
+  /** Cuántas veces la ha mandado la tablet. */
+  intentos: number;
+  primeraVez: string;
+  ultimaVez: string;
+}
+
+/** Respuesta de GET /api/sync/rechazadas. */
+export interface OperacionesRechazadasDto {
+  /** Total de rechazos en el servidor (puede ser mayor que la lista). */
+  total: number;
+  /** Las más recientes primero (por último intento), hasta MAX_RECHAZADAS_LISTA. */
+  operaciones: OperacionRechazadaDto[];
+}

@@ -6,7 +6,12 @@
  */
 import { randomUUID } from 'node:crypto';
 import { prisma } from '../src/lib/prisma.js';
-import { sincronizar, snapshot } from '../src/modules/sync/sync.service.js';
+import {
+  estadoSync,
+  listarRechazadas,
+  sincronizar,
+  snapshot,
+} from '../src/modules/sync/sync.service.js';
 
 let fallas = 0;
 function comprobar(ok: boolean, texto: string) {
@@ -35,6 +40,7 @@ const venta = (id: string, folio: number, cajas: number, precioCaja = 10) => ({
 });
 
 const contactoAntes = await prisma.estadoSync.findUnique({ where: { id: 1 } });
+const rechazosAntes = await prisma.operacionRechazada.count();
 const { _max } = await prisma.ticket.aggregate({ _max: { folio: true } });
 const folio = (_max.folio ?? 0) + 1;
 
@@ -109,6 +115,36 @@ try {
   const rechazo = await prisma.operacionRechazada.findUnique({ where: { id: folioRepetido.id } });
   comprobar(rechazo?.intentos === 2, 'un rechazo reenviado suma intentos');
 
+  // 4b. Lo que consulta la web: estado y lista de rechazos.
+  let estado = await estadoSync();
+  comprobar(
+    estado.rechazadas === rechazosAntes + 3,
+    `estado: cuenta los rechazos (${estado.rechazadas})`,
+  );
+  let lista = await listarRechazadas();
+  const primero = lista.operaciones[0];
+  comprobar(
+    primero?.id === folioRepetido.id &&
+      primero.intentos === 2 &&
+      primero.motivo.includes('ya lo tiene otro ticket') &&
+      primero.creadaEn === new Date(manana).toISOString(),
+    'rechazadas: la más reciente primero, con motivo, intentos y hora de la tablet',
+  );
+  comprobar(lista.total === estado.rechazadas, 'rechazadas: el total coincide con el estado');
+
+  // 4c. Una rechazada que después pasa (ya hay cajas tras la corrección) sale de la lista.
+  r = await sincronizar({ operaciones: [deMas] });
+  comprobar(
+    r.resultados[0]?.estado === 'APLICADA',
+    'reenviar una rechazada que ya cuadra la aplica',
+  );
+  estado = await estadoSync();
+  lista = await listarRechazadas();
+  comprobar(
+    estado.rechazadas === rechazosAntes + 2 && !lista.operaciones.some((x) => x.id === deMas.id),
+    'al aplicarse, sale de las rechazadas',
+  );
+
   // 5. Snapshot.
   const s = await snapshot();
   comprobar(
@@ -119,7 +155,7 @@ try {
     s.tickets.some((t) => t.id === ticketId),
     'el snapshot trae sus tickets',
   );
-  comprobar(s.ultimoFolio === folio, `el snapshot trae el último folio (${s.ultimoFolio})`);
+  comprobar(s.ultimoFolio === folio + 1, `el snapshot trae el último folio (${s.ultimoFolio})`);
 
   // 6. Cancelar y cerrar con la hora de la tablet.
   r = await sincronizar({
@@ -150,6 +186,12 @@ try {
   comprobar(
     (contacto?.ultimoContacto.getTime() ?? 0) >= antes - 1000,
     'un lote vacío registra el contacto',
+  );
+
+  const { ultimoContacto } = await estadoSync();
+  comprobar(
+    ultimoContacto === contacto?.ultimoContacto.toISOString(),
+    `estado: trae el último contacto (${ultimoContacto})`,
   );
 
   // 8. Más de 100 operaciones.
