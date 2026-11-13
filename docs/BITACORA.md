@@ -13,16 +13,16 @@ Estado actual, decisiones y registro de trabajo de la app de ventas. Complementa
 
 ## Estado actual
 
-*Actualizado: 13 de noviembre de 2026 (v1.3.0 lista para publicar)*
+*Actualizado: 13 de noviembre de 2026 (v1.3.0 en producción)*
 
 | | |
 |---|---|
-| **Producción** | v1.2.0 en Railway (rama `main`), desplegada y verificada el 12 nov 2026, con su tag `v1.2.0` en GitHub. v1.3.0 (paso 3) lista para publicar. |
+| **Producción** | v1.3.0 en Railway (rama `main`), desplegada y verificada el 13 nov 2026, con su tag `v1.3.0` en GitHub. La web sigue capturando (`capturaHabilitada: true`) hasta que el tío tenga la tablet. |
 | **Uso real** | El tío ya captura ventas reales en producción, por ahora desde la web en el iPhone. |
 | **Dispositivos** | APK con los cambios del paso 3 probado en un teléfono Android (13 nov). La tablet Samsung del tío y la impresora están pendientes de compra/definición. La web se usa desde el iPhone. |
 | **Desarrollo** | PostgreSQL local con pgAdmin 4, con una copia restaurada del respaldo de producción. |
-| **Siguiente paso** | Publicar v1.3.0: merge a `develop` y a `main`, verificar en producción y crear el tag. Luego, el paso 4. |
-| **Pendiente de git** | Merge de `feature/web-solo-lectura` a `develop` y de `develop` a `main`; tag `v1.3.0` después de verificar. |
+| **Siguiente paso** | Paso 4: decidir cómo descartar rechazadas en la tablet, el ambiente de staging en Railway y cómo dividir el paso en partes. |
+| **Pendiente de git** | Nada. Esta actualización de la bitácora va en `develop` y llega a `main` con la siguiente versión. |
 | **Para el paso 4** | Una operación rechazada solo sale de la lista si la tablet la reenvía y se aplica. Falta decidir cómo descartar las que no se van a reintentar; como la web es de solo lectura, sería desde la tablet. Cambiar `capturaHabilitada` a `false` en la web cuando el tío tenga la tablet con el APK. |
 
 ### Plan: la tablet captura sin conexión
@@ -31,7 +31,7 @@ Estado actual, decisiones y registro de trabajo de la app de ventas. Complementa
 |---|---|---|
 | 1 | Reglas de negocio en `@abastos/shared` (funciones puras, dinero en centavos, `ErrorDeRegla`, pruebas) | ✅ v1.2.0 |
 | 2 | Backend: `POST /api/sync`, `GET /api/sync/snapshot`, rechazos y último contacto, arranque en frío | ✅ v1.2.0 |
-| 3 | Web solo lectura, "Última sincronización de la tablet: hace X", vista de rechazos, reintento ante 503 | ✅ v1.3.0 (por publicar). La web sale con la captura habilitada hasta que llegue la tablet. |
+| 3 | Web solo lectura, "Última sincronización de la tablet: hace X", vista de rechazos, reintento ante 503 | ✅ v1.3.0. La web sale con la captura habilitada hasta que llegue la tablet. |
 | 4 | Tablet: SQLite, cola de operaciones, sincronización, rechazadas, snapshot, aviso de reloj | ⏳ Siguiente |
 | — | Impresora térmica (hardware sin definir) | Después |
 
@@ -72,6 +72,13 @@ Estado actual, decisiones y registro de trabajo de la app de ventas. Complementa
 ---
 
 ## Registro
+
+### 2026-11-13 — v1.3.0 en producción
+
+- Respaldo de producción con pgAdmin y capturas del resumen y las liquidaciones antes del despliegue.
+- Merge `feature/web-solo-lectura` → `develop` → `main`. Sin migraciones; el despliegue quedó *Active*.
+- Verificado en producción: la web captura como antes (bandera en `true`), resumen y liquidaciones iguales a las capturas, `/api/sync/estado` sin contacto ni rechazadas, y la app abre bien después de que el servicio se duerme.
+- Tag `v1.3.0` creado sobre `main` y subido a GitHub después de verificar.
 
 ### 2026-11-13 — APK del paso 3 probado y preparación de v1.3.0
 
