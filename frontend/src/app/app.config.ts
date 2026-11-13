@@ -20,6 +20,7 @@ import { authInterceptor } from './core/auth/auth.interceptor';
 import { AuthService } from './core/auth/auth.service';
 import { apiBaseUrlInterceptor } from './core/api-base-url.interceptor';
 import { Capacitor } from '@capacitor/core';
+import { reintento503Interceptor } from './core/reintento-503.interceptor';
 
 registerLocaleData(localeEsMx);
 
@@ -29,7 +30,7 @@ export const appConfig: ApplicationConfig = {
     provideRouter(routes, withComponentInputBinding()),
     provideHttpClient(
       withFetch(),
-      withInterceptors([apiBaseUrlInterceptor, sinConexionInterceptor, authInterceptor]),
+      withInterceptors([apiBaseUrlInterceptor, sinConexionInterceptor, authInterceptor, reintento503Interceptor]),
     ),
     { provide: LOCALE_ID, useValue: 'es-MX' },
     { provide: DEFAULT_CURRENCY_CODE, useValue: 'MXN' },
@@ -41,7 +42,8 @@ export const appConfig: ApplicationConfig = {
     provideAppInitializer(async () => {
       const auth = inject(AuthService);
       const precarga = inject(PrecargaService);
-      await auth.verificarSesion();
+      const verificacion = auth.verificarSesion();
+      if (!auth.autenticado()) await verificacion;
       if (auth.autenticado()) void precarga.iniciar();
     }),
   ],

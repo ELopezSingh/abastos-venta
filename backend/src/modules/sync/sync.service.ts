@@ -1,4 +1,5 @@
 import {
+  MAX_RECHAZADAS_LISTA,
   loteSyncSchema,
   operacionSchema,
   sobreOperacionSchema,
@@ -6,6 +7,8 @@ import {
   esErrorDeRegla,
 } from '@abastos/shared';
 import type {
+  EstadoSyncDto,
+  OperacionesRechazadasDto,
   Operacion,
   RespuestaSyncDto,
   ResultadoOperacionDto,
@@ -231,4 +234,45 @@ export async function snapshot(): Promise<SnapshotDto> {
       timeout: 30_000,
     },
   );
+}
+
+// ---------- Consulta desde la web (solo lectura) ----------
+
+/**
+ * Último contacto de la tablet y cuántos rechazos hay. No cuenta como
+ * contacto: solo POST /api/sync lo registra.
+ */
+export async function estadoSync(): Promise<EstadoSyncDto> {
+  const [fila, rechazadas] = await Promise.all([
+    prisma.estadoSync.findUnique({ where: { id: 1 }, select: { ultimoContacto: true } }),
+    prisma.operacionRechazada.count(),
+  ]);
+  return {
+    ultimoContacto: fila?.ultimoContacto.toISOString() ?? null,
+    rechazadas,
+  };
+}
+
+/** Operaciones rechazadas, la del intento más reciente primero. */
+export async function listarRechazadas(): Promise<OperacionesRechazadasDto> {
+  const [total, filas] = await Promise.all([
+    prisma.operacionRechazada.count(),
+    prisma.operacionRechazada.findMany({
+      orderBy: [{ ultimaVez: 'desc' }, { id: 'asc' }],
+      take: MAX_RECHAZADAS_LISTA,
+    }),
+  ]);
+  return {
+    total,
+    operaciones: filas.map((f) => ({
+      id: f.id,
+      tipo: f.tipo,
+      datos: f.datos,
+      creadaEn: f.creadaEn.toISOString(),
+      motivo: f.motivo,
+      intentos: f.intentos,
+      primeraVez: f.primeraVez.toISOString(),
+      ultimaVez: f.ultimaVez.toISOString(),
+    })),
+  };
 }
