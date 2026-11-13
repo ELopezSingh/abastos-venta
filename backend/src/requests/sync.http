@@ -1,0 +1,19 @@
+@api = http://localhost:3000/api
+
+### Login
+POST {{api}}/auth/login
+Content-Type: application/json
+
+{ "usuario": "Emiliano Lopez", "contrasena": "contraseña" }
+
+### Estado de la sincronización
+GET {{api}}/sync/estado
+
+### Operaciones rechazadas
+GET {{api}}/sync/rechazadas
+
+### Contacto de la tablet (lote vacío)
+POST {{api}}/sync
+Content-Type: application/json
+
+{ "operaciones": [] }

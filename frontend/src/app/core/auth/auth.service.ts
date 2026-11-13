@@ -1,9 +1,8 @@
 import { LoginInput, SesionUsuario } from '@abastos/shared';
-import { HttpClient } from '@angular/common/http';
+import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { computed, inject, Injectable, signal } from '@angular/core';
 import { Router } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
-import { esErrorDeConexion } from '../pwa/errores-red';
 
 const API = 'api/auth';
 const CLAVE_USUARIO = 'abastos.usuario';
@@ -18,16 +17,20 @@ export class AuthService {
   readonly autenticado = computed(() => this._usuario() !== null);
 
   async verificarSesion(): Promise<void> {
+    const guardado = this.leerGuardado();
+    this._usuario.set(guardado);
     try {
       const r = await firstValueFrom(
         this.http.get<SesionUsuario>(`${API}/yo`, { headers: { 'ngsw-bypass': 'true' } }),
       );
       this.recordar(r.usuario);
     } catch (error) {
-      if (esErrorDeConexion(error)) {
-        this._usuario.set(this.leerGuardado());
-      } else {
-        this.olvidar();
+      // Solo un 401 dice que la sesión ya no vale. Sin red, con el servidor
+      // despertando (503) u otro error, se queda el usuario guardado: si la
+      // sesión sí venció, la siguiente petición da 401 y manda al login.
+      if (error instanceof HttpErrorResponse && error.status === 401) {
+        if (guardado) this.sesionExpirada();
+        else this.olvidar();
       }
     }
   }

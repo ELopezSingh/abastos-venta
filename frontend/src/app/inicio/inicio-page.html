@@ -1,0 +1,63 @@
+<header class="encabezado">
+  <h1>Hoy</h1>
+  <p>{{ hoy + 'T12:00:00' | date: "EEEE d 'de' MMMM" }}</p>
+</header>
+
+<app-datos-guardados [headers]="resumen.headers()" />
+
+<section class="bloque" aria-labelledby="titulo-dia">
+  <h2 id="titulo-dia">Ventas del día</h2>
+  @if (resumen.error()) {
+  <div class="aviso">
+    <p>{{ mensajeDeError(resumen.error()) }}</p>
+    <button type="button" class="boton boton--secundario" (click)="resumen.reload()">
+      Volver a intentar
+    </button>
+  </div>
+  } @else if (resumen.hasValue()) {
+  <p class="cifras">
+    <span class="cifra cifras__grande">{{ resumen.value().ventas | currency }}</span>
+    <span>
+      {{ resumen.value().tickets | number }} {{ resumen.value().tickets === 1 ? 'vale' : 'vales' }}
+      con {{ resumen.value().cajasVendidas | number }} cajas
+    </span>
+  </p>
+  <a class="ir" routerLink="/resumen">Ver resumen</a>
+  } @else {
+  <p class="vacio">Cargando…</p>
+  }
+</section>
+
+<section class="bloque" aria-labelledby="titulo-anden">
+  <h2 id="titulo-anden">En el andén</h2>
+  @if (trailers.error()) {
+  <div class="aviso">
+    <p>{{ mensajeDeError(trailers.error()) }}</p>
+    <button type="button" class="boton boton--secundario" (click)="trailers.reload()">
+      Volver a intentar
+    </button>
+  </div>
+  } @else if (trailers.isLoading() && trailers.value().length === 0) {
+  <p class="vacio">Cargando…</p>
+  } @else {
+  <ul class="trailers">
+    @for (t of trailers.value(); track t.id) {
+    <li>
+      <a [routerLink]="['/trailers', t.id, 'liquidacion']">
+        <span class="trailers__nombre">
+          <strong>{{ t.viaje ?? t.numero }}</strong>
+          <span>{{ t.invernadero }}, trailer {{ t.numero }}</span>
+        </span>
+        <span class="trailers__cajas">
+          <span class="cifra">{{ t.totales.disponibles | number }}</span>
+          de {{ t.totales.cajas | number }} cajas
+        </span>
+      </a>
+    </li>
+    } @empty {
+    <li class="vacio">No hay trailers en el andén.</li>
+    }
+  </ul>
+  <a class="ir" routerLink="/trailers">Ver trailers</a>
+  }
+</section>

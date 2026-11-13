@@ -17,6 +17,7 @@ import { mensajeDeError, mensajeDeErrorAlGuardar } from '../../core/errores';
 import { TrailersApi } from '../trailers.api';
 import { AvisoConexionGuardar } from '../../core/pwa/aviso-conexion-guardar';
 import { ConexionService } from '../../core/pwa/conexion.service';
+import { CAPTURA_HABILITADA } from '../../core/captura';
 
 interface Pedido {
   q: string;
@@ -34,6 +35,8 @@ export class TrailersCerrados {
   private readonly api = inject(TrailersApi);
 
   protected readonly conexion = inject(ConexionService);
+
+  protected readonly captura = CAPTURA_HABILITADA;
 
   protected readonly busqueda = signal('');
   protected readonly trailers = signal<TrailerCerradoDto[]>([]);

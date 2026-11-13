@@ -4,7 +4,9 @@
     autocomplete="off" enterkeyhint="search" />
 </label>
 
-<app-aviso-conexion-guardar />
+@if (captura) {
+  <app-aviso-conexion-guardar />
+}
 
 @if (aviso(); as mensaje) {
   <p class="exito" role="status">{{ mensaje }}</p>
@@ -39,9 +41,11 @@
       </p>
       <div class="cerrado__acciones">
         <a class="cerrado__liquidacion" [routerLink]="['/trailers', t.id, 'liquidacion']">Ver liquidación</a>
-        <button type="button" class="boton boton--secundario" (click)="reabrir(t)" [disabled]="reabriendo() === t.id || !conexion.enLinea()">
-          {{ reabriendo() === t.id ? 'Reabriendo…' : 'Reabrir' }}
-        </button>
+         @if (captura) {
+          <button type="button" class="boton boton--secundario" (click)="reabrir(t)" [disabled]="reabriendo() === t.id || !conexion.enLinea()">
+            {{ reabriendo() === t.id ? 'Reabriendo…' : 'Reabrir' }}
+          </button>
+        }
       </div>
     </li>
   }

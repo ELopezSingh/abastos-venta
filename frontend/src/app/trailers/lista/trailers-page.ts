@@ -9,6 +9,7 @@ import { TrailersCerrados } from './trailers-cerrados';
 import { DatosGuardados } from '../../core/pwa/datos-guardados';
 import { AvisoConexionGuardar } from '../../core/pwa/aviso-conexion-guardar';
 import { ConexionService } from '../../core/pwa/conexion.service';
+import { CAPTURA_HABILITADA } from '../../core/captura';
 
 interface SegmentoExistencia {
   color: string;
@@ -25,6 +26,8 @@ export class TrailersPage {
   private readonly api = inject(TrailersApi);
 
   protected readonly conexion = inject(ConexionService);
+
+  protected readonly captura = CAPTURA_HABILITADA;
 
   /** Pestaña visible. Los cerrados se manejan en su propio componente. */
   protected readonly estado = signal<EstadoTrailer>('ACTIVO');
