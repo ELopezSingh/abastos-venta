@@ -21,6 +21,8 @@ import { AuthService } from './core/auth/auth.service';
 import { apiBaseUrlInterceptor } from './core/api-base-url.interceptor';
 import { Capacitor } from '@capacitor/core';
 import { reintento503Interceptor } from './core/reintento-503.interceptor';
+import { BaseLocalService } from './core/local/base-local.service';
+import { BASE_LOCAL } from './core/captura';
 
 registerLocaleData(localeEsMx);
 
@@ -30,7 +32,12 @@ export const appConfig: ApplicationConfig = {
     provideRouter(routes, withComponentInputBinding()),
     provideHttpClient(
       withFetch(),
-      withInterceptors([apiBaseUrlInterceptor, sinConexionInterceptor, authInterceptor, reintento503Interceptor]),
+      withInterceptors([
+        apiBaseUrlInterceptor,
+        sinConexionInterceptor,
+        authInterceptor,
+        reintento503Interceptor,
+      ]),
     ),
     { provide: LOCALE_ID, useValue: 'es-MX' },
     { provide: DEFAULT_CURRENCY_CODE, useValue: 'MXN' },
@@ -45,6 +52,14 @@ export const appConfig: ApplicationConfig = {
       const verificacion = auth.verificarSesion();
       if (!auth.autenticado()) await verificacion;
       if (auth.autenticado()) void precarga.iniciar();
+    }),
+    provideAppInitializer(() => {
+      // En la tablet la base se abre (y se migra) desde el arranque, sin detenerlo.
+      // Si falla, el motivo se ve en Ajustes.
+      if (BASE_LOCAL)
+        void inject(BaseLocalService)
+          .abrir()
+          .catch(() => undefined);
     }),
   ],
 };

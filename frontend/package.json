@@ -26,7 +26,7 @@
     "@capacitor/core": "^8.6.0",
     "@fontsource/barlow": "^5.3.0",
     "@fontsource/barlow-condensed": "^5.3.0",
-    "jeep-sqlite": "^2.8.0",
+    "jeep-sqlite": "2.8.0",
     "rxjs": "~7.8.0",
     "tslib": "^2.3.0"
   },
@@ -38,6 +38,7 @@
     "@standard-schema/spec": "^1.1.0",
     "jsdom": "^30.0.0",
     "prettier": "^3.8.1",
+    "sql.js": "1.12.0",
     "typescript": "~6.0.2",
     "vitest": "^5.0.0"
   }

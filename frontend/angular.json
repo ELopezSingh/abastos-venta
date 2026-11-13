@@ -61,6 +61,10 @@
                 {
                   "replace": "src/environments/environment.ts",
                   "with": "src/environments/environment.android.ts"
+                },
+                {
+                  "replace": "src/app/core/local/abrir-sqlite.ts",
+                  "with": "src/app/core/local/abrir-sqlite.capacitor.ts"
                 }
               ],
               "serviceWorker": false,
@@ -81,6 +85,10 @@
                 {
                   "replace": "src/environments/environment.ts",
                   "with": "src/environments/environment.tablet-dev.ts"
+                },
+                {
+                  "replace": "src/app/core/local/abrir-sqlite.ts",
+                  "with": "src/app/core/local/abrir-sqlite.capacitor.ts"
                 }
               ],
               "assets": [

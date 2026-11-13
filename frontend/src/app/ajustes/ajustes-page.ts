@@ -2,13 +2,18 @@ import { Component, inject, signal } from '@angular/core';
 import { AuthService } from '../core/auth/auth.service';
 import { ConexionService } from '../core/pwa/conexion.service';
 import { esErrorDeConexion } from '../core/pwa/errores-red';
+import { DatosTablet } from './datos-tablet';
+import { BASE_LOCAL } from '../core/captura';
 
 @Component({
   selector: 'app-ajustes-page',
+  imports: [DatosTablet],
   templateUrl: './ajustes-page.html',
   styleUrl: './ajustes-page.scss',
 })
 export class AjustesPage {
+  protected readonly baseLocal = BASE_LOCAL;
+
   protected readonly auth = inject(AuthService);
   protected readonly conexion = inject(ConexionService);
 
