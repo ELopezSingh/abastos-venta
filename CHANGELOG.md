@@ -6,7 +6,13 @@ El estado del proyecto, las decisiones y el registro de trabajo están en [docs/
 
 ## [Sin publicar]
 
-Paso 3 del plan sin conexión: la web queda de solo lectura, muestra cuándo sincronizó la tablet y las operaciones rechazadas, y reintenta sola cuando el servidor está despertando. Está en la rama `feature/web-solo-lectura`. Falta probar el APK con estos cambios antes de publicarlo.
+Nada todavía.
+
+## [1.3.0] — 2026-11-13
+
+Paso 3 del plan sin conexión: la web ya puede funcionar en modo de solo lectura, muestra cuándo sincronizó la tablet y las operaciones rechazadas, y reintenta sola cuando el servidor está despertando. Probado también en el APK.
+
+**En esta versión la web se publica con la captura todavía habilitada** (`capturaHabilitada: true`), porque el tío captura desde el iPhone hasta tener la tablet. El modo solo lectura se activa después, cambiando esa bandera a `false`.
 
 ### Agregado
 
@@ -14,7 +20,7 @@ Paso 3 del plan sin conexión: la web queda de solo lectura, muestra cuándo sin
 - `GET /api/sync/rechazadas`: rechazos con motivo, intentos y hora de la tablet, los más recientes primero (hasta 100), más el total.
 - `shared`: `EstadoSyncDto`, `OperacionRechazadaDto`, `OperacionesRechazadasDto` y `MAX_RECHAZADAS_LISTA`.
 - Web: pantalla **Inicio** (`/inicio`) con las ventas del día y los trailers en el andén.
-- Web: aviso "Última sincronización de la tablet: hace X" bajo la barra superior. Se revisa cada minuto mientras la app está visible, se pone en amarillo después de 30 minutos y no aparece si la tablet nunca ha sincronizado. Lleva a la pantalla de Sincronización.
+- Web en modo solo lectura: aviso "Última sincronización de la tablet: hace X" bajo la barra superior. Se revisa cada minuto mientras la app está visible, se pone en amarillo después de 30 minutos y no aparece si la tablet nunca ha sincronizado. Lleva a la pantalla de Sincronización.
 - Pantalla **Sincronización** (`/sincronizacion`): último contacto y operaciones rechazadas con su descripción (venta, alta de trailer, cierre…), motivo, intentos y los datos tal como llegaron.
 - Reintento automático ante un 503 del servidor (arranque en frío de Railway): las consultas y el login se reintentan hasta 3 veces según `Retry-After`, con la barra "El servidor está despertando…". Lo que guarda no se reintenta solo, para no duplicar vales.
 - Pruebas del frontend: `haceCuanto`, `describirOperacion` y el interceptor de reintento.
@@ -23,8 +29,8 @@ Paso 3 del plan sin conexión: la web queda de solo lectura, muestra cuándo sin
 
 ### Cambiado
 
-- La web es de **solo lectura**. `capturaHabilitada` en los environments (`false` en la web y `true` en el APK) decide qué se muestra. En la web, `/vender` y `/trailers/nuevo` no existen (`canMatch`) y mandan a Inicio. Se ocultan registrar, cerrar y reabrir trailers y cancelar vales. El APK no cambia.
-- La web inicia en Inicio y su menú es Inicio · Trailers · Vales · Resumen. En el APK sigue iniciando en Vender.
+- Modo **solo lectura** para la web: `capturaHabilitada` en los environments decide qué se muestra. Con `false`, `/vender` y `/trailers/nuevo` no existen (`canMatch`) y mandan a Inicio, y se ocultan registrar, cerrar y reabrir trailers y cancelar vales. El APK siempre usa `true`. En esta versión la web también sale con `true` (ver arriba).
+- Con `false`, la web inicia en Inicio y su menú es Inicio · Trailers · Vales · Resumen. Con `true` (APK y, por ahora, la web) inicia en Vender.
 - Al abrir la app con un usuario guardado, ya no espera a `/api/auth/yo`: abre de inmediato y revisa la sesión en segundo plano.
 - Las rutas REST de escritura siguen activas en el backend, porque el APK todavía captura con ellas. Se apagan al final del paso 4.
 
@@ -91,7 +97,8 @@ Primera versión en producción (Railway).
 - Login de un solo usuario: sesión por cookie guardada en la base, argon2 y límite de intentos.
 - Express sirve el build de Angular; despliegue en Railway con migraciones en el pre-deploy.
 
-[Sin publicar]: https://github.com/ELopezSingh/abastos-venta/compare/v1.2.0...develop
+[Sin publicar]: https://github.com/ELopezSingh/abastos-venta/compare/v1.3.0...develop
+[1.3.0]: https://github.com/ELopezSingh/abastos-venta/compare/v1.2.0...v1.3.0
 [1.2.0]: https://github.com/ELopezSingh/abastos-venta/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/ELopezSingh/abastos-venta/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/ELopezSingh/abastos-venta/releases/tag/v1.0.0

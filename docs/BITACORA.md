@@ -13,17 +13,17 @@ Estado actual, decisiones y registro de trabajo de la app de ventas. Complementa
 
 ## Estado actual
 
-*Actualizado: 12 de noviembre de 2026 (paso 3 terminado)*
+*Actualizado: 13 de noviembre de 2026 (v1.3.0 lista para publicar)*
 
 | | |
 |---|---|
-| **Producción** | v1.2.0 en Railway (rama `main`), desplegada y verificada el 12 nov 2026, con su tag `v1.2.0` en GitHub. |
-| **Uso real** | El tío ya captura ventas reales en producción. |
-| **Dispositivos** | APK probado en un dispositivo Android (login contra Railway). La tablet Samsung del tío y la impresora están pendientes de compra/definición. La web se usa desde el iPhone. |
+| **Producción** | v1.2.0 en Railway (rama `main`), desplegada y verificada el 12 nov 2026, con su tag `v1.2.0` en GitHub. v1.3.0 (paso 3) lista para publicar. |
+| **Uso real** | El tío ya captura ventas reales en producción, por ahora desde la web en el iPhone. |
+| **Dispositivos** | APK con los cambios del paso 3 probado en un teléfono Android (13 nov). La tablet Samsung del tío y la impresora están pendientes de compra/definición. La web se usa desde el iPhone. |
 | **Desarrollo** | PostgreSQL local con pgAdmin 4, con una copia restaurada del respaldo de producción. |
-| **Siguiente paso** | Probar el APK con los cambios del paso 3 (en el equipo de casa: la red de la oficina no deja descargar Gradle). Después, merge de `feature/web-solo-lectura` a `develop` y publicar. Luego, el paso 4. |
-| **Pendiente de git** | Merge de `feature/web-solo-lectura` (paso 3, tres commits) a `develop`. |
-| **Para el paso 4** | Una operación rechazada solo sale de la lista si la tablet la reenvía y se aplica. Falta decidir cómo descartar las que no se van a reintentar; como la web es de solo lectura, sería desde la tablet. |
+| **Siguiente paso** | Publicar v1.3.0: merge a `develop` y a `main`, verificar en producción y crear el tag. Luego, el paso 4. |
+| **Pendiente de git** | Merge de `feature/web-solo-lectura` a `develop` y de `develop` a `main`; tag `v1.3.0` después de verificar. |
+| **Para el paso 4** | Una operación rechazada solo sale de la lista si la tablet la reenvía y se aplica. Falta decidir cómo descartar las que no se van a reintentar; como la web es de solo lectura, sería desde la tablet. Cambiar `capturaHabilitada` a `false` en la web cuando el tío tenga la tablet con el APK. |
 
 ### Plan: la tablet captura sin conexión
 
@@ -31,7 +31,7 @@ Estado actual, decisiones y registro de trabajo de la app de ventas. Complementa
 |---|---|---|
 | 1 | Reglas de negocio en `@abastos/shared` (funciones puras, dinero en centavos, `ErrorDeRegla`, pruebas) | ✅ v1.2.0 |
 | 2 | Backend: `POST /api/sync`, `GET /api/sync/snapshot`, rechazos y último contacto, arranque en frío | ✅ v1.2.0 |
-| 3 | Web solo lectura, "Última sincronización de la tablet: hace X", vista de rechazos, reintento ante 503 | ✅ En `feature/web-solo-lectura` (sin publicar; falta probar el APK) |
+| 3 | Web solo lectura, "Última sincronización de la tablet: hace X", vista de rechazos, reintento ante 503 | ✅ v1.3.0 (por publicar). La web sale con la captura habilitada hasta que llegue la tablet. |
 | 4 | Tablet: SQLite, cola de operaciones, sincronización, rechazadas, snapshot, aviso de reloj | ⏳ Siguiente |
 | — | Impresora térmica (hardware sin definir) | Después |
 
@@ -67,10 +67,17 @@ Estado actual, decisiones y registro de trabajo de la app de ventas. Complementa
 | 2026-11-12 | `GET /api/sync/rechazadas` devuelve las 100 más recientes y el total; los datos se muestran tal como llegaron. | Los rechazos deben ser pocos; un dato mal formado es justo lo que hay que poder revisar. |
 | 2026-11-12 | El reintento ante 503 es solo para consultas (GET) y el login. | Un POST que guarda pudo aplicarse antes de que se cayera la conexión; repetirlo a ciegas podría duplicar un vale. |
 | 2026-11-12 | Al arrancar, solo un 401 cierra la sesión. Con usuario guardado la app abre sin esperar `/api/auth/yo`. | Con el servidor dormido, esperar dejaba la pantalla en blanco hasta un minuto y un 503 mandaba al login. |
+| 2026-11-13 | Publicar el paso 3 como v1.3.0 con `capturaHabilitada: true` en la web. Se cambia a `false` cuando el tío tenga la tablet con el APK, a más tardar con el paso 4. | El tío captura desde el iPhone y la tablet aún no se compra: con `false` se quedaría sin poder vender. Así entran ya las correcciones del arranque en frío y las pantallas de seguimiento. |
 
 ---
 
 ## Registro
+
+### 2026-11-13 — APK del paso 3 probado y preparación de v1.3.0
+
+- APK generado en el equipo de casa e instalado en un teléfono Android: probado con los cambios del paso 3.
+- `capturaHabilitada: true` temporal en `environment.ts` (web), porque el tío todavía captura desde el iPhone.
+- Documentación para v1.3.0: README (estado, API de sync, pantallas y modo solo lectura, autenticación, 503, estructura, pruebas y pendientes), CHANGELOG y esta bitácora.
 
 ### 2026-11-12 — Paso 3: web solo lectura (rama `feature/web-solo-lectura`)
 
@@ -131,6 +138,7 @@ Estado actual, decisiones y registro de trabajo de la app de ventas. Complementa
 - En producción no se venden vales de prueba: un folio usado no se recupera.
 - El tag de una versión se crea después de verificarla en producción.
 - No escribir datos sensibles en código, documentos, commits ni chats.
-- La web local también es de solo lectura (`npm run dev` usa `environment.ts`). Para capturar en local, cambiar `capturaHabilitada` a `true` temporalmente y regresarlo con `git restore frontend/src/environments/environment.ts` antes del commit.
+- La web local usa `environment.ts` (`npm run dev`): captura o es de solo lectura según lo que diga ese archivo. Para probar el otro modo, cambiar `capturaHabilitada` temporalmente y regresarlo con `git restore frontend/src/environments/environment.ts` antes del commit.
+- Antes de quitar una función en producción, confirmar desde qué dispositivo la usa hoy el tío.
 - Los errores de `HttpClient` son `HttpErrorResponse`, no `HttpResponse`: un `instanceof HttpResponse` nunca los detecta.
 - Generar el APK por primera vez descarga Gradle (~200 MB); si la red lo bloquea, hacerlo desde otra red.

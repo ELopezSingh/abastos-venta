@@ -2,7 +2,7 @@
 
 App para registrar las ventas de chile que hace el tío desde el andén en la Central de Abastos de la CDMX. Sustituye los vales escritos a mano y la hoja de Excel con la que se liquida cada viaje a los jefes. Funciona como app web instalable (PWA) y como APK de Android (Capacitor).
 
-> **Estado al 12 de noviembre de 2026:** versión **v1.2.0** en producción (Railway). El tío ya captura ventas reales. El backend ya tiene la sincronización para el modo sin conexión de la tablet (`/api/sync`); faltan la web en modo solo lectura (paso 3) y la tablet con base local (paso 4).
+> **Estado al 13 de noviembre de 2026:** versión **v1.3.0** (Railway). El tío ya captura ventas reales, por ahora desde la web en el iPhone. El backend tiene la sincronización para el modo sin conexión de la tablet (`/api/sync`) y la web ya tiene su modo solo lectura (paso 3), que se activa cuando el tío tenga la tablet. Falta la tablet con base local (paso 4).
 >
 > - Qué cambió en cada versión: [CHANGELOG.md](CHANGELOG.md)
 > - Estado del proyecto, decisiones y registro de trabajo: [docs/BITACORA.md](docs/BITACORA.md)
@@ -176,6 +176,9 @@ abastos-venta/
             ├── app.routes.ts
             ├── core/
             │   ├── auth/      # auth.service, auth.guards, auth.interceptor
+            │   ├── captura.ts # CAPTURA_HABILITADA y RUTA_INICIO (modo captura o solo lectura)
+            │   ├── reintento-503.interceptor.ts  # reintenta consultas y login ante un 503
+            │   ├── estado-servidor.service.ts    # "El servidor está despertando…"
             │   ├── pwa/       # conexion, actualizaciones, precarga, sin-conexion.interceptor,
             │   │              # barra-estado-pwa, datos-guardados, aviso-conexion-guardar, errores-red
             │   ├── api-base-url.interceptor.ts  # antepone la URL de Railway en el APK
@@ -187,9 +190,10 @@ abastos-venta/
             │   └── esquema-borrador.ts
             ├── login/          # login-page
             ├── ajustes/        # ajustes-page (cerrar sesión)
+            ├── inicio/         # inicio-page (web en solo lectura)
+            ├── sincronizacion/ # estado-tablet (aviso), rechazadas-page, sync.api
             ├── trailers/
-            │   ├── lista/      # trailers-page (Activos / Cerrados)
-            │   ├── cerrados/   # trailers-cerrados (buscador + Ver más)
+            │   ├── lista/      # trailers-page (Activos / Cerrados) y trailers-cerrados (buscador + Ver más)
             │   └── nuevo/      # nuevo-trailer-page
             ├── vales/
             │   ├── nuevo/      # nuevo-vale-page (Vender)
@@ -347,6 +351,8 @@ errorHandler
 |---|---|
 | `POST /api/sync` | Recibe `{ operaciones: [...] }` (máximo 100) y las aplica en orden. Responde `{ resultados, horaServidor }` con un resultado por operación: `APLICADA`, `YA_APLICADA` o `RECHAZADA` con su `motivo`. Un lote vacío solo registra el contacto. |
 | `GET /api/sync/snapshot` | Carga inicial de la tablet: `{ generadoEn, ultimoFolio, trailers, tickets }`, con los trailers activos y todos sus tickets (vigentes y cancelados). |
+| `GET /api/sync/estado` | Para la web: `{ ultimoContacto, rechazadas }`. `ultimoContacto` es `null` si la tablet nunca ha sincronizado. Consultarlo no cuenta como contacto. |
+| `GET /api/sync/rechazadas` | Para la web: `{ total, operaciones }` con las rechazadas más recientes primero (por último intento, hasta 100): tipo, motivo, intentos, hora de la tablet y los datos tal como llegaron. |
 
 Cada operación tiene `{ id (UUID), tipo, creadaEn (ISO con zona), datos }`. Los tipos son `trailer.crear`, `trailer.actualizar`, `trailer.cambiarEstado`, `linea.agregar`, `linea.actualizar`, `linea.eliminar`, `ticket.crear` y `ticket.cancelar`. Los esquemas están en `shared/src/operaciones.ts` y las reglas de aplicación, en la [sección 7](#7-reglas-de-negocio).
 
@@ -408,24 +414,35 @@ Las reglas viven en `shared/src/reglas/` como funciones puras con pruebas, y las
 ### Shell
 
 - **Barra superior** (solo con sesión): nombre de la app a la izquierda y engrane de Ajustes a la derecha. No es fija; se va con el scroll.
-- **`app-barra-estado-pwa`**: aparece solo cuando no hay red o hay una actualización pendiente.
-- **Navegación inferior** (solo con sesión): Vender · Vales · Trailers · Resumen.
+- **`app-barra-estado-pwa`**: aparece solo cuando no hay red, cuando el servidor está despertando (503) o cuando hay una actualización pendiente.
+- **`app-estado-tablet`** (solo en modo solo lectura): "Última sincronización de la tablet: hace X" bajo la barra superior. Se revisa cada minuto con la app visible, se pone amarillo después de 30 min, no aparece si la tablet nunca ha sincronizado y lleva a `/sincronizacion`.
+- **Navegación inferior** (solo con sesión): en modo captura, Trailers · Vender · Vales · Resumen; en solo lectura, Inicio · Trailers · Vales · Resumen.
 - Al imprimir se ocultan la navegación y los controles marcados `.no-imprimir`.
+
+### Modo captura y modo solo lectura
+
+`capturaHabilitada` en los environments (`core/captura.ts`) se fija al compilar:
+
+- **`true` (modo captura)**: el APK siempre. Inicia en `/vender` y no hay aviso de la tablet. `/inicio` y `/sincronizacion` existen, aunque no están en el menú.
+- **`false` (solo lectura)**: la web, cuando el tío tenga la tablet. `/vender` y `/trailers/nuevo` no existen (`canMatch`) y caen a Inicio; se ocultan registrar, cerrar y reabrir trailers y cancelar vales. La lógica sigue en los componentes, solo oculta.
+- **En v1.3.0 la web se publica con `true`**, porque el tío todavía captura desde el iPhone. Se cambia a `false` cuando tenga la tablet con el APK, a más tardar con el paso 4.
 
 ### Rutas
 
 | Ruta | Pantalla | Notas |
 |---|---|---|
 | `/login` | Login | `invitadoGuard`: si ya hay sesión, manda a `/`. |
-| `/` | → `/vender` | Todo lo de abajo cuelga de un padre con `canActivateChild: [sesionGuard]`. |
-| `/vender` | Nuevo vale | Pantalla de inicio. En iPad, la captura va a la izquierda y los productos a la derecha; en teléfono, en una columna. Valida existencias en tiempo real. |
+| `/` | → `/vender` (captura) o `/inicio` (solo lectura) | Todo lo de abajo cuelga de un padre con `canActivateChild: [sesionGuard]`. |
+| `/inicio` | Inicio | Ventas del día y trailers en el andén. Es la pantalla de inicio en solo lectura. |
+| `/vender` | Nuevo vale | Solo en modo captura; es su pantalla de inicio. En iPad, la captura va a la izquierda y los productos a la derecha; en teléfono, en una columna. Valida existencias en tiempo real. |
 | `/vales` | Vales del día | Total, cajas y cancelados del día. Cada vale muestra folio, hora, cliente, líneas (con trailer) y total. Cancelar pide confirmación ("Las N cajas vuelven a quedar disponibles"). |
 | `/trailers` | Trailers | Pestaña **Activos**: tarjetas con barra de existencias por color, detalle por tamaño, "Ver liquidación" y "Cerrar trailer" (con confirmación). Pestaña **Cerrados**: tarjetas compactas, buscador con *debounce* ("Viaje, trailer, invernadero o placa"), "Ver más" de 20 en 20 y botón Reabrir. |
-| `/trailers/nuevo` | Registrar trailer | Datos generales, viaje, gastos, comisión (10 por defecto) y manifiesto con varias líneas. Usa Signal Forms validados con los esquemas de `shared`. |
+| `/trailers/nuevo` | Registrar trailer | Solo en modo captura. Datos generales, viaje, gastos, comisión (10 por defecto) y manifiesto con varias líneas. Usa Signal Forms validados con los esquemas de `shared`. |
 | `/trailers/:id/liquidacion` | Liquidación | Botón de imprimir (`window.print()`): en iPhone permite guardar como PDF o compartir. |
 | `/resumen` | Resumen del día | Selector de día (anterior/siguiente/fecha). |
+| `/sincronizacion` | Sincronización | Último contacto de la tablet y operaciones rechazadas con su descripción, motivo, intentos y los datos tal como llegaron. |
 | `/ajustes` | Ajustes | Sección "Cuenta": usuario actual y "Cerrar sesión" con confirmación en la misma pantalla. |
-| `**` | → `/vender` | |
+| `**` | → igual que `/` | |
 
 ### Convenciones de UI
 
@@ -460,10 +477,11 @@ Pide usuario y contraseña (mínimo 10 caracteres, sin mostrarla en pantalla) y 
 **Frontend**
 
 
-- `AuthService`: signal del usuario actual. Al arrancar llama a `GET /api/auth/yo` con el header `ngsw-bypass` para que el service worker nunca responda desde caché.
+- `AuthService`: signal del usuario actual. Al arrancar llama a `GET /api/auth/yo` con el header `ngsw-bypass` para que el service worker nunca responda desde caché. Si hay un usuario guardado, la app abre de inmediato y la revisión corre en segundo plano. **Solo un 401 cierra la sesión**: sin red o con el servidor despertando (503) se conserva el usuario.
 - Sin red al abrir la app, se usa el nombre guardado en `localStorage` del último login (`abastos.usuario`). Es solo el nombre; la sesión real vive en la cookie.
 - `sesionGuard` / `invitadoGuard` protegen las rutas.
 - `authInterceptor`: cualquier 401 fuera de `/api/auth/` manda al login.
+  > Nota a revisar en el paso 4: la excepción compara contra `'/api/auth'`, pero las URLs llegan como `api/auth/...` (o con la URL de Railway en el APK), así que nunca aplica. Hoy no causa problemas (un 401 en el login solo vuelve a mostrar el login), pero la tablet no debe perder nada local cuando la sesión venza.
 - La precarga de datos solo corre si hay sesión.
 - Cerrar sesión **requiere conexión**; si no, la cookie seguiría viva en el servidor.
 - Login con botón propio para mostrar u ocultar la contraseña (se ocultó el de Edge) y `autocapitalize="none"` para iPhone.
@@ -472,7 +490,7 @@ Pide usuario y contraseña (mínimo 10 caracteres, sin mostrarla en pantalla) y 
 
 ## 10. Funcionamiento sin conexión
 
-Hay tres niveles. Los niveles 1 y 2 están terminados para la web. El nivel 3 (capturar sin red y sincronizar después) es para la tablet y está en desarrollo: el backend ya está listo (v1.2.0).
+Hay tres niveles. Los niveles 1 y 2 están terminados para la web. El nivel 3 (capturar sin red y sincronizar después) es para la tablet y está en desarrollo: el backend ya está listo (v1.2.0) y la web tiene su modo solo lectura y las pantallas de seguimiento (v1.3.0).
 
 ### Nivel 1: la app abre sin red
 
@@ -499,6 +517,12 @@ Hay tres niveles. Los niveles 1 y 2 están terminados para la web. El nivel 3 (c
 
 **Limitaciones de la web**: solo está disponible offline lo que ya se consultó con red; la búsqueda de cerrados funciona sin red solo para combinaciones ya consultadas; guardar siempre requiere conexión.
 
+### Servidor despertando (503)
+
+- Si el backend responde 503 ("El servidor está despertando…"), `reintento503Interceptor` espera lo que indica `Retry-After` (tope de 15 s) y reintenta hasta 3 veces. Mientras tanto, `EstadoServidorService` muestra la barra "El servidor está despertando. Reintentando en unos segundos…".
+- Solo se reintentan las consultas (GET/HEAD) y el login. Lo que guarda no se reintenta solo: pudo aplicarse antes de que se cayera la conexión y repetirlo podría duplicar un vale.
+- Funciona igual en la web y en el APK.
+
 ### APK de Android (Capacitor)
 
 - Mismo código de Angular, compilado con la configuración `android` de `angular.json`: usa `environment.android.ts` (URL de Railway) y **sin service worker**.
@@ -514,7 +538,7 @@ Diseño acordado:
 - El servidor aplica cada operación con las mismas reglas de `shared` y registra su UUID: un reenvío nunca duplica nada.
 - La tablet genera todos los ids y **asigna el folio**. Es el único dispositivo que captura; la web queda solo de lectura.
 - Las operaciones rechazadas se marcan en la tablet con su motivo (no se descartan) y también quedan en el servidor para revisarlas a distancia.
-- La web muestra "Última sincronización de la tablet: hace X".
+- La web muestra "Última sincronización de la tablet: hace X" y las operaciones rechazadas (hecho en v1.3.0; se ve cuando la web está en solo lectura).
 - Para instalar o reinstalar la tablet se usa `GET /api/sync/snapshot`.
 - La tablet compara su reloj con el header `Date` del servidor para avisar si está desfasado.
 - Si la sesión de 30 días vence sin señal, la tablet pide login y conserva la cola.
@@ -730,6 +754,14 @@ npm test -w shared
 
 Cubren la aritmética en centavos (incluido el redondeo de la comisión), la venta (`prepararTicket`), el folio, la cancelación, las correcciones al manifiesto, la liquidación, el resumen del día y los esquemas de las operaciones de sincronización. Si cambias una regla de negocio, agrega o ajusta su prueba.
 
+### Pruebas automáticas (frontend)
+
+```bash
+npm run test -w frontend
+```
+
+Cubren `haceCuanto`, `describirOperacion`, el interceptor de reintento ante 503 y el componente principal.
+
 ### Scripts de verificación del backend
 
 Se corren desde `backend/` contra la base **local** (de preferencia una copia restaurada de producción). Nunca contra producción.
@@ -758,7 +790,7 @@ Se corren desde `backend/` contra la base **local** (de preferencia una copia re
 
 ### Archivos `.http` (REST Client)
 
-En `backend/src/requests/` están `trailers.http`, `tickets.http` y `resumen.http`, con un ejemplo por endpoint. Como la API exige sesión, **agrega al inicio de cada archivo** una petición de login; REST Client guarda la cookie y la manda en las siguientes:
+En `backend/src/requests/` están `trailers.http`, `tickets.http`, `resumen.http` y `sync.http`, con un ejemplo por endpoint. Como la API exige sesión, **agrega al inicio de cada archivo** una petición de login; REST Client guarda la cookie y la manda en las siguientes:
 
 ```http
 @api = http://localhost:3000/api
@@ -788,6 +820,8 @@ No guardes una contraseña real en estos archivos dentro del repo: reemplázala 
 12. Arranque en frío: detener PostgreSQL (`Stop-Service` en PowerShell como administrador) y navegar → "El servidor está despertando…", no "Error interno". Al arrancarlo, todo vuelve a funcionar.
 13. Sincronización desde la consola del navegador (con sesión): mandar un `trailer.crear` y un `ticket.crear` con `creadaEn` de ayer a `POST /api/sync` → aparecen en la app con la fecha de ayer; una venta sin existencias → `RECHAZADA` y queda en `operaciones_rechazadas`.
 14. Vista de teléfono angosto (iPhone SE) en DevTools, y el APK en el dispositivo Android.
+15. Solo lectura (en local, con `capturaHabilitada: false`): `/vender` y `/trailers/nuevo` llevan a Inicio y no hay botones de captura; el aviso de la tablet no aparece si nunca sincronizó y se pone amarillo después de 30 min; la pantalla Sincronización muestra las rechazadas.
+16. Abrir la app con el servidor despertando (PostgreSQL detenido y luego arrancado): barra "El servidor está despertando…", sin mandar al login ni quedarse en blanco.
 
 ---
 
@@ -806,6 +840,7 @@ No guardes una contraseña real en estos archivos dentro del repo: reemplázala 
 | "Cannot GET /…" al recargar en `http-server` | `http-server` no tiene *fallback* de SPA | Abrir la raíz `http://localhost:8080/`. En producción Express responde `index.html` |
 | El proxy de `http-server` manda mal las peticiones | Un `?` al final de la URL del proxy | Usar `--proxy http://localhost:3000` sin `?` |
 | Fallos de conexión con `localhost` en Windows | Resolución `localhost` (IPv6) vs `127.0.0.1` | Usar `127.0.0.1` en el destino del proxy si ocurre |
+| Un 503 al abrir la app mandaba al login | `errores-red.ts` revisaba `HttpResponse` en vez de `HttpErrorResponse`, y el arranque esperaba `/api/auth/yo` | Resuelto en v1.3.0: solo un 401 cierra la sesión y la app abre sin esperar |
 | Ojo de "ver contraseña" aparece y desaparece | Es el de Edge, no el de la app | Ya se ocultó con `::-ms-reveal` y hay botón propio |
 | Al editar un archivo por partes desaparece una función | Se reemplazó un bloque más grande del necesario | Revisar `git diff <archivo>` después de editar y antes del commit |
 
@@ -902,7 +937,8 @@ Contraseñas, tokens, cadenas de conexión con credenciales y la contraseña del
 
 - [x] **Paso 1** — Reglas de negocio en `@abastos/shared` (v1.2.0).
 - [x] **Paso 2** — Backend: `POST /api/sync`, `GET /api/sync/snapshot` y tolerancia al arranque en frío (v1.2.0).
-- [ ] **Paso 3** — Web en modo solo lectura (sin crear, vender, cerrar ni cancelar), "Última sincronización de la tablet: hace X", vista de operaciones rechazadas y reintento en el frontend ante 503.
+- [x] **Paso 3** — Web en modo solo lectura (sin crear, vender, cerrar ni cancelar), "Última sincronización de la tablet: hace X", vista de operaciones rechazadas y reintento en el frontend ante 503 (v1.3.0).
+- [ ] Cambiar `capturaHabilitada` a `false` en la web cuando el tío tenga la tablet con el APK (a más tardar con el paso 4).
 - [ ] **Paso 4** — Tablet: SQLite (`@capacitor-community/sqlite`), cola de operaciones, sincronización al recuperar señal, registro de rechazadas, carga inicial con el snapshot y aviso de reloj desfasado.
 
 Antes del paso 4 conviene tener un ambiente de **staging** en Railway, porque ese paso es el más delicado.
