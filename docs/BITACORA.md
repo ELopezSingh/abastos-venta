@@ -21,9 +21,9 @@ Estado actual, decisiones y registro de trabajo de la app de ventas. Complementa
 | **Uso real** | El tío ya captura ventas reales en producción, por ahora desde la web en el iPhone. |
 | **Dispositivos** | APK con los cambios del paso 3 probado en un teléfono Android (13 nov). La tablet Samsung del tío y la impresora están pendientes de compra/definición. La web se usa desde el iPhone. |
 | **Desarrollo** | PostgreSQL local con pgAdmin 4, con una copia restaurada del respaldo de producción. |
-| **Siguiente paso** | Paso 4: decidir cómo descartar rechazadas en la tablet, el ambiente de staging en Railway y cómo dividir el paso en partes. |
+| **Siguiente paso** | Paso 4, parte 4a (firma, staging, SQLite y carga inicial). Decisiones del paso 4 tomadas el 13 nov (ver tabla). |
 | **Pendiente de git** | Nada. Esta actualización de la bitácora va en `develop` y llega a `main` con la siguiente versión. |
-| **Para el paso 4** | Una operación rechazada solo sale de la lista si la tablet la reenvía y se aplica. Falta decidir cómo descartar las que no se van a reintentar; como la web es de solo lectura, sería desde la tablet. Cambiar `capturaHabilitada` a `false` en la web cuando el tío tenga la tablet con el APK. |
+| **Para el paso 4** | Partes: 4a firma, staging, SQLite y snapshot · 4b lectura local · 4c escritura local y cola · 4d envío de la cola, reloj y sesión · 4e rechazadas (reintentar, descartar, reconstruir) · 4f apagar REST de escritura, `capturaHabilitada: false` en la web y publicar. |
 
 ### Plan: la tablet captura sin conexión
 
@@ -68,6 +68,16 @@ Estado actual, decisiones y registro de trabajo de la app de ventas. Complementa
 | 2026-11-12 | El reintento ante 503 es solo para consultas (GET) y el login. | Un POST que guarda pudo aplicarse antes de que se cayera la conexión; repetirlo a ciegas podría duplicar un vale. |
 | 2026-11-12 | Al arrancar, solo un 401 cierra la sesión. Con usuario guardado la app abre sin esperar `/api/auth/yo`. | Con el servidor dormido, esperar dejaba la pantalla en blanco hasta un minuto y un 503 mandaba al login. |
 | 2026-11-13 | Publicar el paso 3 como v1.3.0 con `capturaHabilitada: true` en la web. Se cambia a `false` cuando el tío tenga la tablet con el APK, a más tardar con el paso 4. | El tío captura desde el iPhone y la tablet aún no se compra: con `false` se quedaría sin poder vender. Así entran ya las correcciones del arranque en frío y las pantallas de seguimiento. |
+| 2026-11-13 | Paso 4: una rechazada se puede **Reintentar** o **Descartar**. Descartar es una operación nueva (`operacion.descartar`) que viaja por la cola de `/api/sync`; después la tablet reconstruye su base con el snapshot y reaplica la cola pendiente. Corregir = descartar y volver a hacer la acción. | La tablet aplica cada operación local antes de mandarla: descartar también debe deshacer su efecto. Por la cola funciona sin señal, respeta el orden y queda auditado; reconstruir sirve igual para los 8 tipos. |
+| 2026-11-13 | Staging: ambiente aparte en el mismo proyecto de Railway (o un proyecto aparte si el plan no lo permite), con su propia base restaurada de producción. APK de staging con otro `appId` (`com.chiles.ventas.staging`). | El APK de producción no se usa para pruebas (un folio usado no se recupera). Con otro `appId` las dos apps conviven y no se mezclan datos. |
+| 2026-11-13 | El paso 4 se divide en 4a–4f y se publica como una sola versión al final. | Un APK que guarda local pero aún no sincroniza perdería ventas; las partes se validan en local o en staging. |
+| 2026-11-13 | La lógica de la tablet se prueba también en el navegador con la implementación web del plugin (`jeep-sqlite`), detrás de un servicio propio. El APK se genera en casa para validar cada parte. | La red de la oficina no deja descargar Gradle. |
+| 2026-11-13 | APK firmado con una llave de release (fuera del repo, con respaldo; su contraseña en el gestor) y `versionCode` que sube en cada versión. Ajustes muestra las operaciones pendientes y advierte antes de cerrar sesión o reinstalar. | Con otra llave Android obliga a desinstalar, y desinstalar borra la cola sin subir. |
+| 2026-11-13 | La tablet lee de su base lo de operación (Vender, Trailers activos, Vales y Resumen de hoy, Liquidación de activos y lo que cerró la tablet). Los cerrados antiguos y los días anteriores a la instalación se consultan en línea. La base local no se purga. | El snapshot solo trae los trailers activos; el volumen es pequeño y la tablet acumula su propio historial. |
+| 2026-11-13 | Reabrir un trailer que está en la base local funciona sin señal. Si no está, requiere conexión: la tablet lo baja (`GET /api/sync/trailers/:id`), lo guarda y encola la operación. `trailer.actualizar` y `linea.*` se soportan en la cola, pero sin pantallas nuevas. | Los cerrados antes de instalar la tablet no vienen en el snapshot. |
+| 2026-11-13 | Reloj: la tablet compara su hora con el header `Date` de cada respuesta; aviso amarillo si difiere más de 5 min y rojo si pasa de 1 h. No bloquea las ventas. | Las ventas guardan la hora de la tablet; un reloj mal puesto las mandaría a otro día, pero detener la venta en el andén sería peor. |
+| 2026-11-13 | Sesión: un 401 pausa la cola, pide login y la retoma; nunca borra datos locales. Antes se corrige `authInterceptor`, cuya excepción de `/api/auth` nunca aplica. | La sesión puede vencer sin señal; las ventas pendientes no se pueden perder. |
+| 2026-11-13 | Las partes 4a–4e se validan en local y staging; se publica todo como v1.4.0 (con 4f) cuando el tío tenga la tablet. Sin backend local por Wi-Fi por ahora. | Apagar las rutas REST y la captura en la web solo tiene sentido con la tablet en uso; publicar antes el backend no aporta. |
 
 ---
 
