@@ -8,7 +8,8 @@
     "watch": "ng build --watch --configuration development",
     "test": "ng test",
     "build:android": "ng build --configuration android && npx cap sync android",
-    "android": "npx cap open android"
+    "android": "npx cap open android",
+    "start:tablet": "node scripts/copiar-wasm.mjs && ng serve -c tablet-dev"
   },
   "private": true,
   "dependencies": {
@@ -20,10 +21,12 @@
     "@angular/platform-browser": "^22.2.0",
     "@angular/router": "^22.2.0",
     "@angular/service-worker": "^22.2.0",
+    "@capacitor-community/sqlite": "^8.1.1",
     "@capacitor/android": "^8.6.0",
     "@capacitor/core": "^8.6.0",
     "@fontsource/barlow": "^5.3.0",
     "@fontsource/barlow-condensed": "^5.3.0",
+    "jeep-sqlite": "^2.8.0",
     "rxjs": "~7.8.0",
     "tslib": "^2.3.0"
   },

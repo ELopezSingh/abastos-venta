@@ -72,6 +72,21 @@
               "optimization": false,
               "extractLicenses": false,
               "sourceMap": true
+            },
+            "tablet-dev": {
+              "optimization": false,
+              "extractLicenses": false,
+              "sourceMap": true,
+              "fileReplacements": [
+                {
+                  "replace": "src/environments/environment.ts",
+                  "with": "src/environments/environment.tablet-dev.ts"
+                }
+              ],
+              "assets": [
+                { "glob": "**/*", "input": "public" },
+                { "glob": "sql-wasm.wasm", "input": "src/wasm", "output": "assets" }
+              ]
             }
           },
           "defaultConfiguration": "production"
@@ -84,6 +99,9 @@
             },
             "development": {
               "buildTarget": "frontend:build:development"
+            },
+            "tablet-dev": {
+              "buildTarget": "frontend:build:tablet-dev"
             }
           },
           "defaultConfiguration": "development",

@@ -42,3 +42,6 @@ __screenshots__/
 # System files
 .DS_Store
 Thumbs.db
+
+# Copia de sql-wasm.wasm para tablet-dev (la genera scripts/copiar-wasm.mjs)
+/src/wasm

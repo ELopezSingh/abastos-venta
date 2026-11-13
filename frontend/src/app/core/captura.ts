@@ -8,3 +8,10 @@ export const CAPTURA_HABILITADA = environment.capturaHabilitada;
 
 /** Pantalla de inicio: Vender en la tablet, Inicio en la web. */
 export const RUTA_INICIO = CAPTURA_HABILITADA ? 'vender' : 'inicio';
+
+/**
+ * true en el APK y en tablet-dev: los datos viven en SQLite y se sincronizan
+ * con POST /api/sync. Es independiente de CAPTURA_HABILITADA, porque hoy la
+ * web también captura (directo en el servidor).
+ */
+export const BASE_LOCAL = environment.baseLocal;
