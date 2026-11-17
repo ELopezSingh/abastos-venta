@@ -23,6 +23,7 @@ import { Capacitor } from '@capacitor/core';
 import { reintento503Interceptor } from './core/reintento-503.interceptor';
 import { BaseLocalService } from './core/local/base-local.service';
 import { BASE_LOCAL } from './core/captura';
+import { CargaInicialService } from './core/local/carga-inicial.service';
 
 registerLocaleData(localeEsMx);
 
@@ -54,12 +55,14 @@ export const appConfig: ApplicationConfig = {
       if (auth.autenticado()) void precarga.iniciar();
     }),
     provideAppInitializer(() => {
-      // En la tablet la base se abre (y se migra) desde el arranque, sin detenerlo.
-      // Si falla, el motivo se ve en Ajustes.
-      if (BASE_LOCAL)
-        void inject(BaseLocalService)
-          .abrir()
-          .catch(() => undefined);
+      if (!BASE_LOCAL) return;
+      // En la tablet la base se abre (y se migra) desde el arranque, sin detenerlo;
+      // con sesión, se cargan los datos del servidor si todavía no los tiene.
+      // Si algo falla, el motivo se ve en Ajustes.
+      void inject(BaseLocalService)
+        .abrir()
+        .catch(() => undefined);
+      inject(CargaInicialService).iniciar();
     }),
   ],
 };
