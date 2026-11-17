@@ -13,7 +13,7 @@ Estado actual, decisiones y registro de trabajo de la app de ventas. Complementa
 
 ## Estado actual
 
-*Actualizado: 13 de noviembre de 2026 (v1.3.0 en producción)*
+*Actualizado: 17 de noviembre de 2026 (paso 4: 4a.1 y 4a.2 terminadas)*
 
 | | |
 |---|---|
@@ -21,9 +21,9 @@ Estado actual, decisiones y registro de trabajo de la app de ventas. Complementa
 | **Uso real** | El tío ya captura ventas reales en producción, por ahora desde la web en el iPhone. |
 | **Dispositivos** | APK con los cambios del paso 3 probado en un teléfono Android (13 nov). La tablet Samsung del tío y la impresora están pendientes de compra/definición. La web se usa desde el iPhone. |
 | **Desarrollo** | PostgreSQL local con pgAdmin 4, con una copia restaurada del respaldo de producción. |
-| **Siguiente paso** | Paso 4, parte 4a (firma, staging, SQLite y carga inicial). Decisiones del paso 4 tomadas el 13 nov (ver tabla). |
-| **Pendiente de git** | Nada. Esta actualización de la bitácora va en `develop` y llega a `main` con la siguiente versión. |
-| **Para el paso 4** | Partes: 4a firma, staging, SQLite y snapshot · 4b lectura local · 4c escritura local y cola · 4d envío de la cola, reloj y sesión · 4e rechazadas (reintentar, descartar, reconstruir) · 4f apagar REST de escritura, `capturaHabilitada: false` en la web y publicar. |
+| **Siguiente paso** | 4a.3: carga inicial con el snapshot y estado en Ajustes. Después, 4a.4 (`versionCode` y APK firmado en casa). |
+| **Pendiente de git** | El paso 4 se trabaja en `feature/tablet-sin-conexion` (desde `develop`). |
+| **Para el paso 4** | Partes: 4a SQLite, snapshot y firma (4a.1 ✅, 4a.2 ✅, 4a.3, 4a.4) · 4b lectura local · 4c escritura local y cola · 4d envío de la cola, reloj y sesión · 4e rechazadas (reintentar, descartar, reconstruir) · 4f apagar REST de escritura, `capturaHabilitada: false` en la web y publicar. |
 
 ### Plan: la tablet captura sin conexión
 
@@ -32,7 +32,7 @@ Estado actual, decisiones y registro de trabajo de la app de ventas. Complementa
 | 1 | Reglas de negocio en `@abastos/shared` (funciones puras, dinero en centavos, `ErrorDeRegla`, pruebas) | ✅ v1.2.0 |
 | 2 | Backend: `POST /api/sync`, `GET /api/sync/snapshot`, rechazos y último contacto, arranque en frío | ✅ v1.2.0 |
 | 3 | Web solo lectura, "Última sincronización de la tablet: hace X", vista de rechazos, reintento ante 503 | ✅ v1.3.0. La web sale con la captura habilitada hasta que llegue la tablet. |
-| 4 | Tablet: SQLite, cola de operaciones, sincronización, rechazadas, snapshot, aviso de reloj | ⏳ Siguiente |
+| 4 | Tablet: SQLite, cola de operaciones, sincronización, rechazadas, snapshot, aviso de reloj | 🔧 En curso (`feature/tablet-sin-conexion`) |
 | — | Impresora térmica (hardware sin definir) | Después |
 
 ---
@@ -78,10 +78,22 @@ Estado actual, decisiones y registro de trabajo de la app de ventas. Complementa
 | 2026-11-13 | Reloj: la tablet compara su hora con el header `Date` de cada respuesta; aviso amarillo si difiere más de 5 min y rojo si pasa de 1 h. No bloquea las ventas. | Las ventas guardan la hora de la tablet; un reloj mal puesto las mandaría a otro día, pero detener la venta en el andén sería peor. |
 | 2026-11-13 | Sesión: un 401 pausa la cola, pide login y la retoma; nunca borra datos locales. Antes se corrige `authInterceptor`, cuya excepción de `/api/auth` nunca aplica. | La sesión puede vencer sin señal; las ventas pendientes no se pueden perder. |
 | 2026-11-13 | Las partes 4a–4e se validan en local y staging; se publica todo como v1.4.0 (con 4f) cuando el tío tenga la tablet. Sin backend local por Wi-Fi por ahora. | Apagar las rutas REST y la captura en la web solo tiene sentido con la tablet en uso; publicar antes el backend no aporta. |
+| 2026-11-13 | El APK se firma con el asistente de Android Studio ("Generate Signed APK"), sin configurar la firma en Gradle. La variante de staging (otro `appId`) pasa a la 4d. | Así las contraseñas de la llave nunca quedan en un archivo; staging no tiene contra qué probarse antes de la 4d. |
+| 2026-11-13 | Bandera `baseLocal` en los environments, aparte de `capturaHabilitada`: `true` en `android` y `tablet-dev`, `false` en la web. | Hoy la web también captura (directo en el servidor); solo la tablet usa SQLite. |
+| 2026-11-13 | El plugin entra solo en `android` y `tablet-dev`: `abrir-sqlite.ts` es una versión vacía que esas configuraciones reemplazan por `abrir-sqlite.capacitor.ts` (`fileReplacements`). | Para que el plugin y `jeep-sqlite` no entren al build de la web ni los descargue el service worker del iPhone. |
+| 2026-11-13 | Esquema local: dinero en centavos, comisión en centésimas (10 % = 1000), fechas ISO UTC como texto, versión en `PRAGMA user_version`. `ticket_detalle` guarda trailer, producto, color y tamaño, sin llave foránea al manifiesto. La `cola` llega como migración v2 en la 4c. | El snapshot puede traer un vale con una línea de un trailer cerrado que no está en la tablet; así cada vale se muestra solo. La v2 prueba las migraciones sobre una base con datos. |
+| 2026-11-17 | `jeep-sqlite` 2.8.0 y `sql.js` 1.12.0 fijados en versión exacta; `copiar-wasm.mjs` revisa que coincidan. | `jeep-sqlite` trae adentro el JavaScript de sql.js 1.11/1.12; el `.wasm` de otra versión (npm había instalado 1.16.0) falla con `LinkError`. |
 
 ---
 
 ## Registro
+
+### 2026-11-13 al 2026-11-17 — Paso 4: 4a.1 y 4a.2 (rama `feature/tablet-sin-conexion`)
+
+- **4a.1**: `hoyCdmx`, `fechaCdmx`, `rangoDelDia` y `sumarDias` pasan a `shared/src/fechas.ts` (con pruebas); `backend/src/lib/fechas.ts` y `frontend/src/app/core/fechas.ts` solo los reexportan. Bandera `baseLocal`, `environment.tablet-dev.ts`, configuración `tablet-dev` en `angular.json`, `npm run dev:tablet` y `scripts/copiar-wasm.mjs`. Dependencias `@capacitor-community/sqlite` y `jeep-sqlite`.
+- **4a.2**: `core/local/` con `MotorSqlite`, `abrir-sqlite` (web vacía y Capacitor), `esquema.ts` (v1) y `BaseLocalService` (una cosa a la vez, transacciones, migraciones). Ajustes muestra "Datos en la tablet". 6 pruebas nuevas con un motor falso.
+- Problemas encontrados y resueltos: la versión *lazy* de `jeep-sqlite` (`loader`) se quedaba esperando para siempre con el servidor de desarrollo de Angular (se usa `dist/components`, más un límite de 20 s al abrir); el `.wasm` de sql.js 1.16.0 no coincidía con el que trae `jeep-sqlite` (`LinkError`); `inject()` después de un `await` en un inicializador (se separó en su propio `provideAppInitializer`).
+- Validado en el navegador con `npm run dev:tablet`: base v1 creada en IndexedDB, persiste al recargar y no se vuelve a migrar. Pruebas del frontend y builds de web y android. El plugin no aparece en el build de la web.
 
 ### 2026-11-13 — v1.3.0 en producción
 
@@ -159,3 +171,7 @@ Estado actual, decisiones y registro de trabajo de la app de ventas. Complementa
 - Antes de quitar una función en producción, confirmar desde qué dispositivo la usa hoy el tío.
 - Los errores de `HttpClient` son `HttpErrorResponse`, no `HttpResponse`: un `instanceof HttpResponse` nunca los detecta.
 - Generar el APK por primera vez descarga Gradle (~200 MB); si la red lo bloquea, hacerlo desde otra red.
+- `jeep-sqlite` trae adentro el JavaScript de sql.js: el `sql-wasm.wasm` debe ser de esa misma versión (hoy 1.12.0). Antes de actualizar `jeep-sqlite`, revisar qué sql.js trae y ajustar `copiar-wasm.mjs`.
+- Con el servidor de desarrollo de Angular, usar `jeep-sqlite/dist/components` y no `jeep-sqlite/loader` (la carga *lazy* nunca termina).
+- En un `provideAppInitializer` asíncrono, todos los `inject()` van antes del primer `await`.
+- Editar con fin de línea LF: un archivo guardado en CRLF aparece reescrito completo en `git diff`.
